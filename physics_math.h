@@ -2,22 +2,28 @@
 // Created by Lukas Campbell on 03/06/2025.
 //
 
-
 #pragma once
 #include "headers.h"
-
 
 namespace PhysicsMath
 {
     float clamp(float val, float min, float max)
     {
-        return (val < min) ? min : (val > max) ? max
-                                               : val;
+        return (val < min) ? min : (val > max) ? max : val;
+    }
+
+    bool equals(float a, float b, float epsilon = 0.0001f)
+    {
+        return std::abs(a - b) < epsilon;
+    }
+
+    bool equals(const Vec2& a, const Vec2& b, float epsilon = 0.0001f)
+    {
+        return equals(a.m_x, b.m_x, epsilon) && equals(a.m_y, b.m_y, epsilon);
     }
 
     std::vector<Vec2> order_verts_clockwise(std::vector<Vec2>& verts)
     {
-
         const int len = verts.size();
 
         Vec2 centroid = Vec2();
@@ -29,9 +35,8 @@ namespace PhysicsMath
 
         // calculate the angles of each vertex from centroid
         // so we can later sort
-        std::vector<float> angles;
+        std::vector<float> angles(len);
 
-        //todo: allocate size before loop already
         for (size_t i = 0; i < len; ++i)
         {
             angles[i] = (verts[i] - centroid).heading();
@@ -80,8 +85,8 @@ namespace PhysicsMath
         v128_t y_cos = wasm_f32x4_mul(xxyy1, cos_theta_v);
         v128_t new_y = wasm_f32x4_add(x_sin, y_cos);
 
-        v128_t tx_v = wasm_f32x4_splat(t_pos.x);
-        v128_t ty_v = wasm_f32x4_splat(t_pos.y);
+        v128_t tx_v = wasm_f32x4_splat(t_pos.m_x);
+        v128_t ty_v = wasm_f32x4_splat(t_pos.m_y);
 
         new_x = wasm_f32x4_add(new_x, tx_v);
         new_y = wasm_f32x4_add(new_y, ty_v);
