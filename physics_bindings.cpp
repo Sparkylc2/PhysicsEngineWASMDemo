@@ -1,19 +1,14 @@
 //
 // Created by Lukas Campbell on 08/06/2025.
 //
-#pragma once
 #include "headers.h"
 
 using namespace emscripten;
 
-extern void step();
-extern float DT;
-extern bool IS_PAUSED;
 
 extern std::vector<Rigidbody> BODIES;
-extern float DT;
-extern bool IS_PAUSED;
 extern void step();
+
 
 int add_circle_body(float x, float y, float radius, bool is_static)
 {
@@ -177,7 +172,10 @@ void set_dt(float dt)
 {
     DT = dt;
 }
-
+float get_dt()
+{
+    return DT;
+}
 void set_paused(bool paused)
 {
     IS_PAUSED = paused;
@@ -205,6 +203,10 @@ std::vector<Vec2Wrapper> get_transformed_vertices(int index)
     }
     return result;
 }
+
+
+
+
 
 EMSCRIPTEN_BINDINGS(physics_engine)
 {
@@ -246,4 +248,11 @@ EMSCRIPTEN_BINDINGS(physics_engine)
     function("getBodyWidth", &get_body_width);
     function("getBodyHeight", &get_body_height);
     function("getTransformedVertices", &get_transformed_vertices);
+
+    function("getDT", &get_dt);
+
+
+
 }
+
+

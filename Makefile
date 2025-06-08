@@ -1,5 +1,5 @@
 EMCC = emcc
-SRC = physics_engine.cpp physics_bindings.cpp
+SRC = physics_engine.cpp physics_bindings.cpp globals.cpp rigidbody.cpp
 OUT = ../../../src/wasm/physics_engine.js
 HEADERS = headers.h vec2.h enums.h aabb.h physics_math.h rigidbody.h collisions.h collision_resolution.h
 
@@ -9,11 +9,6 @@ all:
 		-s ALLOW_MEMORY_GROWTH=1 \
 		-o $(OUT)
 
-debug:
-	$(EMCC) $(SRC) -I. -O0 -g \
-		--bind -sASSERTIONS -s MODULARIZE=1 -s EXPORT_ES6=1 -s ENVIRONMENT=web -msimd128 \
-		-s ALLOW_MEMORY_GROWTH=1 \
-		-o $(OUT)
 
 clean:
 	rm -f ../../../src/wasm/physics_engine.*

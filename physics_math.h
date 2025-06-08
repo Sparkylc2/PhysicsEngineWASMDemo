@@ -64,6 +64,17 @@ namespace PhysicsMath
         return verts;
     }
 
+    inline Vec2 transform(const Vec2 &pt, const Vec2 &t_pos, const float &angle)
+    {
+        float cos_theta = std::cos(angle);
+        float sin_theta = std::sin(angle);
+
+        float x = pt.m_x * cos_theta - pt.m_y * sin_theta;
+        float y = pt.m_x * sin_theta + pt.m_y * cos_theta;
+
+        return Vec2(x, y) + t_pos;
+    }
+
     inline void transform_verts(std::vector<Vec2> &dst, const std::vector<Vec2> &src, const Vec2 &t_pos, const float &angle)
     {
         float cos_theta = std::cos(angle);

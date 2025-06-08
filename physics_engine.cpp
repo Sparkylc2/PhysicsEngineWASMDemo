@@ -1,37 +1,20 @@
 #include "headers.h"
 
-void step_bodies();
-void broad_phase();
-void narrow_phase();
-
-constexpr uint16_t TOTAL_ITER = 512;
-float DT = 0.01f;
-bool IS_PAUSED = false;
-
-std::vector<std::vector<size_t>> COLLISION_PAIRS;
-std::vector<Collisions::CollisionResult> COLLISION_RESULTS;
-std::vector<Rigidbody> BODIES;
-
-void step()
-{
-    for (size_t iter = 0; iter < TOTAL_ITER; ++iter)
-    {
-        COLLISION_PAIRS.clear();
-        COLLISION_RESULTS.clear();
-
-        step_bodies();
-        broad_phase();
-        narrow_phase();
-    }
-}
-
 void step_bodies()
 {
+
+    if (DEBUG)
+        std::cout << "Stepping bodies" << std::endl;
+
     if (IS_PAUSED)
         return;
 
     for (auto &body : BODIES)
     {
+        if (DEBUG)
+            std::cout << "Updating body at " << body.m_pos.m_x << ", "
+                      << body.m_pos.m_y << ", IS_STATIC " << body.m_is_static << std::endl;
+
         if (body.m_is_static)
             continue;
         body.update(DT / static_cast<float>(TOTAL_ITER));
@@ -83,5 +66,37 @@ void narrow_phase()
 
             COLLISION_RESULTS.push_back(result);
         }
+    }
+}
+
+void step()
+{
+    if (DEBUG)
+    {
+        std::stringstream ss = std::stringstream();
+        ss << "----------------------------------------\n";
+        ss << "Step called with DT: " << DT << ", IS_PAUSED: " << (IS_PAUSED ? "true" : "false") << "\n";
+        ss << "Total bodies: " << BODIES.size() << "\n";
+        ss << "Total collision pairs: " << COLLISION_PAIRS.size() << "\n";
+        ss << "Total collision results: " << COLLISION_RESULTS.size() << "\n";
+        for (size_t i = 0; i < BODIES.size(); ++i)
+        {
+            ss << "Body " << i << ": Position(" << BODIES[i].m_pos.m_x << ", "
+               << BODIES[i].m_pos.m_y << "), Velocity(" << BODIES[i].m_vel.m_x << ", "
+               << BODIES[i].m_vel.m_y << "), Angle: " << BODIES[i].m_angle << "\n";
+        }
+
+        ss << "----------------------------------------\n";
+        std::cout << ss.str();
+    }
+    for (size_t iter = 0; iter < TOTAL_ITER; ++iter)
+    {
+
+        COLLISION_PAIRS.clear();
+        COLLISION_RESULTS.clear();
+        step_bodies();
+
+        broad_phase();
+        narrow_phase();
     }
 }
