@@ -9,8 +9,8 @@
 #include <algorithm>
 #include <limits>
 #include <cstdint>
-
 #include <wasm_simd128.h>
+#include <emscripten/bind.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -20,12 +20,16 @@
 #define FLT_MAX std::numeric_limits<float>::max()
 #endif
 
-struct Vec2;
+#include "enums.h"
+#include "vec2.h"
+
 struct AABB;
 struct Rigidbody;
 
-#include "vec2.h"
-#include "enums.h"
-#include "aabb.h"
 #include "physics_math.h"
+
+#include "aabb.h"
 #include "rigidbody.h"
+
+#include "collisions.h"
+#include "collision_resolution.h"

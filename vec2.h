@@ -108,11 +108,13 @@ struct Vec2
         m_y *= inv_length;
     }
 
-    inline float cross(Vec2& v) {
+    inline float cross(Vec2 &v)
+    {
         return m_x * v.m_y - m_y * v.m_x;
     }
 
-    inline void zero() {
+    inline void zero()
+    {
         m_x = 0.0;
         m_y = 0.0;
     }

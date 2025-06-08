@@ -7,22 +7,23 @@
 
 namespace PhysicsMath
 {
-    float clamp(float val, float min, float max)
+    inline float clamp(float val, float min, float max)
     {
-        return (val < min) ? min : (val > max) ? max : val;
+        return (val < min) ? min : (val > max) ? max
+                                               : val;
     }
 
-    bool equals(float a, float b, float epsilon = 0.0001f)
+    inline bool equals(float a, float b, float epsilon = 0.0001f)
     {
         return std::abs(a - b) < epsilon;
     }
 
-    bool equals(const Vec2& a, const Vec2& b, float epsilon = 0.0001f)
+    inline bool equals(const Vec2 &a, const Vec2 &b, float epsilon = 0.0001f)
     {
         return equals(a.m_x, b.m_x, epsilon) && equals(a.m_y, b.m_y, epsilon);
     }
 
-    std::vector<Vec2> order_verts_clockwise(std::vector<Vec2>& verts)
+    inline std::vector<Vec2> order_verts_clockwise(std::vector<Vec2> &verts)
     {
         const int len = verts.size();
 
@@ -63,7 +64,7 @@ namespace PhysicsMath
         return verts;
     }
 
-    void transform_verts(std::vector<Vec2>& dst, const std::vector<Vec2>& src, const Vec2& t_pos, const float& angle)
+    inline void transform_verts(std::vector<Vec2> &dst, const std::vector<Vec2> &src, const Vec2 &t_pos, const float &angle)
     {
         float cos_theta = std::cos(angle);
         float sin_theta = std::sin(angle);
@@ -74,8 +75,8 @@ namespace PhysicsMath
         v128_t v0 = wasm_v128_load(&src[0]);
         v128_t v1 = wasm_v128_load(&src[2]);
 
-        v128_t xxyy0 = wasm_v32x4_shuffle(v0, v1, 0, 2, 4, 6);
-        v128_t xxyy1 = wasm_v32x4_shuffle(v0, v1, 1, 3, 5, 7);
+        v128_t xxyy0 = wasm_i32x4_shuffle(v0, v1, 0, 2, 4, 6);
+        v128_t xxyy1 = wasm_i32x4_shuffle(v0, v1, 1, 3, 5, 7);
 
         v128_t x_cos = wasm_f32x4_mul(xxyy0, cos_theta_v);
         v128_t y_sin = wasm_f32x4_mul(xxyy1, sin_theta_v);
@@ -91,8 +92,8 @@ namespace PhysicsMath
         new_x = wasm_f32x4_add(new_x, tx_v);
         new_y = wasm_f32x4_add(new_y, ty_v);
 
-        v128_t xy0 = wasm_v32x4_shuffle(new_x, new_y, 0, 4, 1, 5);
-        v128_t xy1 = wasm_v32x4_shuffle(new_x, new_y, 2, 6, 3, 7);
+        v128_t xy0 = wasm_i32x4_shuffle(new_x, new_y, 0, 4, 1, 5);
+        v128_t xy1 = wasm_i32x4_shuffle(new_x, new_y, 2, 6, 3, 7);
 
         wasm_v128_store(&dst[0], xy0);
         wasm_v128_store(&dst[2], xy1);

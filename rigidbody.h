@@ -7,8 +7,8 @@
 
 struct Rigidbody
 {
-    static constexpr float m_DENSITY = 1000.0f;
-    
+    static constexpr float m_DENSITY = 1.0f;
+
     Vec2 m_pos = {};
     Vec2 m_prev_pos = {};
     Vec2 m_vel = {};
@@ -36,6 +36,10 @@ struct Rigidbody
     bool m_is_static = false;
 
     ShapeType m_shape_type;
+
+    float m_restitution = 0.5f;
+    float m_static_friction = 0.8f;
+    float m_kinetic_friction = 0.3f;
 
     Rigidbody(float radius, bool is_static) : m_is_static(is_static)
     {
@@ -89,7 +93,6 @@ struct Rigidbody
         }
         else
         {
-            // easy fallback 
             float cos_theta = std::cos(m_angle);
             float sin_theta = std::sin(m_angle);
 
@@ -97,7 +100,7 @@ struct Rigidbody
             {
                 float x = m_verts[i].m_x * cos_theta - m_verts[i].m_y * sin_theta;
                 float y = m_verts[i].m_x * sin_theta + m_verts[i].m_y * cos_theta;
-                
+
                 m_transformed_verts[i].m_x = x + m_pos.m_x;
                 m_transformed_verts[i].m_y = y + m_pos.m_y;
             }
@@ -127,6 +130,7 @@ struct Rigidbody
         m_transform_update_req = true;
         integrate_pos(sf_dt);
         integrate_angular(sf_dt);
+        update_aabb();
     }
 
     void integrate_pos(float sf_dt)
@@ -134,7 +138,7 @@ struct Rigidbody
         Vec2 accel = calculate_accel(m_pos);
         m_vel += accel * sf_dt;
         m_pos += m_vel * sf_dt;
-        
+
         m_transform_update_req = true;
     }
 
@@ -143,36 +147,33 @@ struct Rigidbody
         float angular_accel = calculate_angular_accel();
         m_angular_vel += angular_accel * sf_dt;
         m_angle += m_angular_vel * sf_dt;
-        
+
         m_transform_update_req = true;
     }
 
-    Vec2 calculate_accel(const Vec2& pos)
-    {        
-        Vec2 net_f = {};
-        for (auto &constraint : m_constraints)
-        {
-            Vec2 curr_f = constraint.get_force(this, pos);
-            net_f += curr_f;
-        }
-
-        return net_f;
+    Vec2 calculate_accel(const Vec2 &pos)
+    {
+        if (m_is_static)
+            return Vec2(0, 0);
+        return Vec2(0, 9.81f);
     }
 
     float calculate_angular_accel()
     {
-        float net_t = 0.0;
-        for (auto &constraint : m_constraints)
-        {
-            Vec2 lever = constraint.get_application_point(this, m_pos) - m_pos;
-            net_t += lever.cross(constraint.get_force(this, m_pos));
-        }
-        return net_t;
+        return 0.0f;
+    }
+
+    void move(const Vec2 &amount)
+    {
+        m_pos += amount;
+        m_transform_update_req = true;
+        m_aabb_update_req = true;
     }
 
     void update_aabb()
     {
-        if (!m_aabb_update_req) return;
+        if (!m_aabb_update_req)
+            return;
 
         if (m_shape_type == ShapeType::CIRCLE)
         {
@@ -182,16 +183,20 @@ struct Rigidbody
         else
         {
             transform_verts();
-            
+
             float min_x = FLT_MAX, min_y = FLT_MAX;
             float max_x = -FLT_MAX, max_y = -FLT_MAX;
 
-            for (const Vec2& v : m_transformed_verts)
+            for (const Vec2 &v : m_transformed_verts)
             {
-                if (v.m_x < min_x) min_x = v.m_x;
-                if (v.m_y < min_y) min_y = v.m_y;
-                if (v.m_x > max_x) max_x = v.m_x;
-                if (v.m_y > max_y) max_y = v.m_y;
+                if (v.m_x < min_x)
+                    min_x = v.m_x;
+                if (v.m_y < min_y)
+                    min_y = v.m_y;
+                if (v.m_x > max_x)
+                    max_x = v.m_x;
+                if (v.m_y > max_y)
+                    max_y = v.m_y;
             }
 
             m_aabb.m_min = Vec2(min_x, min_y);

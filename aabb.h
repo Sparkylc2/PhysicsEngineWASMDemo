@@ -16,6 +16,4 @@ struct AABB
         m_min = min;
         m_max = max;
     }
-
-
 };

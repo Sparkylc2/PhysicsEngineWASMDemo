@@ -1,11 +1,18 @@
-EMCC = emccAdd commentMore actions
-SRC = physics_engine.cpp
+EMCC = emcc
+SRC = physics_engine.cpp physics_bindings.cpp
 OUT = ../../../src/wasm/physics_engine.js
-EIGEN = ../../../lib/cpp
+HEADERS = headers.h vec2.h enums.h aabb.h physics_math.h rigidbody.h collisions.h collision_resolution.h
 
 all:
-	$(EMCC) $(SRC) -I$(EIGEN) -O2 \
+	$(EMCC) $(SRC) -I. -O2 \
 		--bind -sASSERTIONS -s MODULARIZE=1 -s EXPORT_ES6=1 -s ENVIRONMENT=web -msimd128 \
+		-s ALLOW_MEMORY_GROWTH=1 \
+		-o $(OUT)
+
+debug:
+	$(EMCC) $(SRC) -I. -O0 -g \
+		--bind -sASSERTIONS -s MODULARIZE=1 -s EXPORT_ES6=1 -s ENVIRONMENT=web -msimd128 \
+		-s ALLOW_MEMORY_GROWTH=1 \
 		-o $(OUT)
 
 clean:
