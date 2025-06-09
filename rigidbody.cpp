@@ -85,7 +85,7 @@ Vec2 Rigidbody::calculate_accel(const Vec2 &pos)
         return net_f;
     }
 
-    for (auto *f : m_f_registry)
+    for (const auto& f : m_f_registry)
     {
         net_f += f->get_force(this, pos);
     }
@@ -101,7 +101,7 @@ float Rigidbody::calculate_angular_accel()
         return net_t;
     }
 
-    for (auto *f : m_f_registry)
+    for (const auto& f : m_f_registry)
     {
         Vec2 curr_f = f->get_force(this, m_pos);
         Vec2 lever_arm = f->get_application_point(this, m_pos) - m_pos;
@@ -152,4 +152,43 @@ void Rigidbody::update_aabb()
     }
 
     m_aabb_update_req = false;
+}
+
+
+void Rigidbody::update_geometry(float width, float height)
+{
+    m_width = width;
+    m_height = height;
+    m_radius = 0.0f;
+    m_shape_type = ShapeType::BOX;
+    m_area = width * height;
+
+    if (!m_is_static)
+    {
+        m_mass = m_area * m_DENSITY;
+        m_inv_mass = 1.0f / m_mass;
+
+        m_rot_inertia = (1.0f / 12.0f) * m_mass * (width * width + height * height);
+        m_inv_rot_inertia = 1.0f / m_rot_inertia;
+    }
+
+    create_box_vertices();
+    update_aabb();
+}
+void Rigidbody::update_geometry(float radius)
+{
+    m_radius = radius;
+    m_shape_type = ShapeType::CIRCLE;
+    m_area = M_PI * radius * radius;
+
+    if (!m_is_static)
+    {
+        m_mass = m_area * m_DENSITY;
+        m_inv_mass = 1.0f / m_mass;
+
+        m_rot_inertia = 0.5f * m_mass * radius * radius;
+        m_inv_rot_inertia = 1.0f / m_rot_inertia;
+    }
+
+    update_aabb();
 }

@@ -8,3 +8,5 @@ bool IS_PAUSED = false;
 std::vector<std::vector<size_t>> COLLISION_PAIRS;
 std::vector<Collisions::CollisionResult> COLLISION_RESULTS;
 std::vector<Rigidbody> BODIES;
+
+std::vector<Rigidbody*> WALL_BODIES;

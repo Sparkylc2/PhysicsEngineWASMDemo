@@ -11,3 +11,4 @@ extern bool IS_PAUSED;
 extern std::vector<std::vector<size_t>> COLLISION_PAIRS;
 extern std::vector<Collisions::CollisionResult> COLLISION_RESULTS;
 extern std::vector<Rigidbody> BODIES;
+extern std::vector<Rigidbody*> WALL_BODIES;

@@ -90,4 +90,7 @@ struct Rigidbody
 
     void move(const Vec2 &amount);
     void update_aabb();
+    void update_geometry(float width, float height);
+    void update_geometry(float radius);
+
 };
