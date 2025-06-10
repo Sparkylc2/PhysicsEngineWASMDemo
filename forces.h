@@ -90,7 +90,7 @@ struct Spring : public ForceRegistry
 
         float f = (displacement - m_equilibrium_len) * m_stiffness;
         f += dir.dot(other_vel - parent_vel) * m_damping;
-
+        
         return dir * f;
     }
 

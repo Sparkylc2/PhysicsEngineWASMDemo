@@ -89,6 +89,9 @@ Vec2 Rigidbody::calculate_accel(const Vec2 &pos)
     {
         net_f += f->get_force(this, pos);
     }
+
+    std::cout << "Net force: " << net_f.m_x << ", " << net_f.m_y << std::endl;
+
     return net_f * m_inv_mass;
 }
 

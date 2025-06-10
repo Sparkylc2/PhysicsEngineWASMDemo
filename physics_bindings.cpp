@@ -17,6 +17,9 @@ struct Vec2Wrapper
 extern std::vector<Rigidbody> BODIES;
 extern void step();
 
+static int g_draggedBodyIndex = -1;
+static Vec2 g_mousePos;
+static Spring *g_dragSpring = nullptr;
 
 int add_circle_body(float x, float y, float radius, bool is_static)
 {
@@ -34,6 +37,215 @@ int add_box_body(float x, float y, float width, float height, bool is_static)
     body.m_pos = Vec2(x, y);
     body.update_aabb();
     return BODIES.size() - 1;
+}
+
+int start_mouse_drag(float x, float y)
+{
+    g_mousePos = Vec2(x, y);
+
+    for (int i = 0; i < BODIES.size(); ++i)
+    {
+        Rigidbody &body = BODIES[i];
+
+        if (!Collisions::intersect_aabb_with_point(body.m_aabb, g_mousePos))
+            continue;
+
+        bool hit = false;
+        if (body.m_shape_type == ShapeType::CIRCLE)
+        {
+            Vec2 diff = g_mousePos - body.m_pos;
+            hit = (diff.len() <= body.m_radius);
+        }
+        else
+        {
+            float cos_theta = std::cos(-body.m_angle);
+            float sin_theta = std::sin(-body.m_angle);
+            Vec2 local = g_mousePos - body.m_pos;
+            Vec2 rotated(
+                local.m_x * cos_theta - local.m_y * sin_theta,
+                local.m_x * sin_theta + local.m_y * cos_theta);
+
+            hit = (std::abs(rotated.m_x) <= body.m_width / 2.0f &&
+                   std::abs(rotated.m_y) <= body.m_height / 2.0f);
+        }
+
+        if (hit)
+        {
+            g_draggedBodyIndex = i;
+
+            if (g_dragSpring)
+                delete g_dragSpring;
+            g_dragSpring = new Spring(&body, Vec2(0, 0), g_mousePos);
+            g_dragSpring->m_stiffness = 300.0f;
+            g_dragSpring->m_damping = 10.0f;
+            body.m_f_registry.push_back(g_dragSpring);
+
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+void update_mouse_position(float x, float y)
+{
+    g_mousePos = Vec2(x, y);
+    if (g_dragSpring)
+    {
+        g_dragSpring->m_anchor = g_mousePos;
+    }
+}
+
+void end_mouse_drag()
+{
+    if (g_draggedBodyIndex >= 0 && g_draggedBodyIndex < BODIES.size() && g_dragSpring)
+    {
+        auto &registry = BODIES[g_draggedBodyIndex].m_f_registry;
+        registry.erase(std::remove(registry.begin(), registry.end(), g_dragSpring), registry.end());
+        delete g_dragSpring;
+        g_dragSpring = nullptr;
+    }
+    g_draggedBodyIndex = -1;
+}
+
+int get_body_at_position(float x, float y)
+{
+    Vec2 pos(x, y);
+
+    for (int i = 0; i < BODIES.size(); ++i)
+    {
+        Rigidbody &body = BODIES[i];
+
+        if (!Collisions::intersect_aabb_with_point(body.m_aabb, pos))
+            continue;
+
+        bool hit = false;
+        if (body.m_shape_type == ShapeType::CIRCLE)
+        {
+            Vec2 diff = pos - body.m_pos;
+            hit = (diff.len() <= body.m_radius);
+        }
+        else
+        {
+            float cos_theta = std::cos(-body.m_angle);
+            float sin_theta = std::sin(-body.m_angle);
+            Vec2 local = pos - body.m_pos;
+            Vec2 rotated(
+                local.m_x * cos_theta - local.m_y * sin_theta,
+                local.m_x * sin_theta + local.m_y * cos_theta);
+
+            hit = (std::abs(rotated.m_x) <= body.m_width / 2.0f &&
+                   std::abs(rotated.m_y) <= body.m_height / 2.0f);
+        }
+
+        if (hit)
+            return i;
+    }
+
+    return -1;
+}
+
+void add_spring_between_js(int index_a, int index_b, float stiffness, float damping)
+{
+    if (index_a < 0 || index_a >= BODIES.size() ||
+        index_b < 0 || index_b >= BODIES.size() ||
+        index_a == index_b)
+        return;
+
+    Rigidbody *rb_a = &BODIES[index_a];
+    Rigidbody *rb_b = &BODIES[index_b];
+
+    Spring *spring = new Spring(rb_a, rb_b, Vec2(0, 0), Vec2(0, 0));
+    spring->m_stiffness = stiffness;
+    spring->m_damping = damping;
+
+    rb_a->m_f_registry.push_back(spring);
+    rb_b->m_f_registry.push_back(spring);
+}
+
+void add_spring_between(int index_a, int index_b, const Vec2 &world_anchor_a, const Vec2 &world_anchor_b, float stiffness, float damping)
+{
+    if (index_a < 0 || index_a >= BODIES.size() ||
+        index_b < 0 || index_b >= BODIES.size() ||
+        index_a == index_b)
+        return;
+
+    Rigidbody *rb_a = &BODIES[index_a];
+    Rigidbody *rb_b = &BODIES[index_b];
+
+    Spring *spring = new Spring(rb_a, rb_b, world_anchor_a, world_anchor_b);
+    spring->m_stiffness = stiffness;
+    spring->m_damping = damping;
+
+    rb_a->m_f_registry.push_back(spring);
+    rb_b->m_f_registry.push_back(spring);
+}
+
+
+void add_spring_to_point_js(int index, float anchor_x, float anchor_y, float stiffness, float damping)
+{
+    if (index < 0 || index >= BODIES.size())
+        return;
+
+    Rigidbody *rb = &BODIES[index];
+
+    Vec2 anchor(anchor_x, anchor_y);
+    Spring *spring = new Spring(rb, Vec2(0, 0), anchor);
+    spring->m_stiffness = stiffness;
+    spring->m_damping = damping;
+
+    rb->m_f_registry.push_back(spring);
+}
+
+void add_spring_to_point(int index, const Vec2& anchor, float stiffness, float damping)
+{
+    if (index < 0 || index >= BODIES.size())
+        return;
+
+    Rigidbody *rb = &BODIES[index];
+
+    Spring *spring = new Spring(rb, Vec2(0, 0), anchor);
+    spring->m_stiffness = stiffness;
+    spring->m_damping = damping;
+
+    rb->m_f_registry.push_back(spring);
+}
+void add_spring_to_point(int index, const Vec2& world_anchor_a, const Vec2& anchor, float stiffness, float damping)
+{
+    if (index < 0 || index >= BODIES.size())
+        return;
+
+    Rigidbody *rb = &BODIES[index];
+
+    Spring *spring = new Spring(rb, world_anchor_a, anchor);
+    spring->m_stiffness = stiffness;
+    spring->m_damping = damping;
+
+    rb->m_f_registry.push_back(spring);
+}
+
+void add_motor_to_body(int index, float target_angular_velocity)
+{
+    if (index < 0 || index >= BODIES.size())
+        return;
+
+    Rigidbody *rb = &BODIES[index];
+    Motor *motor = new Motor(rb, target_angular_velocity);
+
+    rb->m_f_registry.push_back(motor);
+}
+
+void clear_forces_on_body(int index)
+{
+    if (index < 0 || index >= BODIES.size())
+        return;
+
+    Rigidbody &body = BODIES[index];
+    for (auto *force : body.m_f_registry)
+    {
+        delete force;
+    }
+    body.m_f_registry.clear();
 }
 
 void set_body_position(int index, float x, float y)
@@ -86,6 +298,27 @@ void set_body_friction(int index, float static_friction, float kinetic_friction)
         BODIES[index].m_static_friction = static_friction;
         BODIES[index].m_kinetic_friction = kinetic_friction;
     }
+}
+
+float getBodyX(int index)
+{
+    if (index >= 0 && index < BODIES.size())
+        return BODIES[index].m_pos.m_x;
+    return 0.0f;
+}
+
+float getBodyY(int index)
+{
+    if (index >= 0 && index < BODIES.size())
+        return BODIES[index].m_pos.m_y;
+    return 0.0f;
+}
+
+float getBodyAngle(int index)
+{
+    if (index >= 0 && index < BODIES.size())
+        return BODIES[index].m_angle;
+    return 0.0f;
 }
 
 Vec2Wrapper get_body_pos(int index)
@@ -152,12 +385,17 @@ void remove_body(int index)
 {
     if (index >= 0 && index < BODIES.size())
     {
+        clear_forces_on_body(index);
         BODIES.erase(BODIES.begin() + index);
     }
 }
 
 void clear_bodies()
 {
+    for (int i = 0; i < BODIES.size(); ++i)
+    {
+        clear_forces_on_body(i);
+    }
     BODIES.clear();
 }
 
@@ -174,6 +412,17 @@ float get_dt()
 {
     return DT;
 }
+
+void setDT(float dt)
+{
+    DT = dt;
+}
+
+float getDT()
+{
+    return DT;
+}
+
 void set_paused(bool paused)
 {
     IS_PAUSED = paused;
@@ -201,44 +450,205 @@ void add_gravity(int index)
     }
 }
 
+void set_gravity(float gx, float gy)
+{
+}
+
 void set_bounds(float width, float height)
 {
-    if (WALL_BODIES.empty()) {
-        WALL_BODIES.reserve(4);
-        WALL_BODIES.push_back(&BODIES.emplace_back(width, 1.0f, true)); // Bottom wall
-        WALL_BODIES.back()->move({width / 2.0f, 0.5f});
+    if (width <= 0 || height <= 0)
+    {
+        std::cout << "Invalid bounds: width=" << width << ", height=" << height << std::endl;
+        return;
+    }
 
-        WALL_BODIES.push_back(&BODIES.emplace_back(width, 1.0f, true)); // Top wall
-        WALL_BODIES.back()->move({width / 2.0f, height - 0.5f});
+    if (!WALL_BODIES.empty())
+    {
+        for (auto *wall : WALL_BODIES)
+        {
+            auto it = std::find_if(BODIES.begin(), BODIES.end(),
+                                   [wall](const Rigidbody &body)
+                                   { return &body == wall; });
+            if (it != BODIES.end())
+            {
+                BODIES.erase(it);
+            }
+        }
+        WALL_BODIES.clear();
+    }
 
-        WALL_BODIES.push_back(&BODIES.emplace_back(1.0f, height, true)); // Left wall
-        WALL_BODIES.back()->move({0.5f, height / 2.0f});
-        
-        WALL_BODIES.push_back(&BODIES.emplace_back(1.0f, height, true)); // Right wall
-        WALL_BODIES.back()->move({width - 0.5f, height / 2.0f});
-    } else {
-        WALL_BODIES[0]->move({width / 2.0f, 0.5f});
-        WALL_BODIES[0]->update_geometry(width, 1.0f);
-        WALL_BODIES[1]->move({width / 2.0f, height - 0.5f});
-        WALL_BODIES[1]->update_geometry(width, 1.0f);
-        WALL_BODIES[2]->move({0.5f, height / 2.0f});
-        WALL_BODIES[2]->update_geometry(1.0f, height);
-        WALL_BODIES[3]->move({width - 0.5f, height / 2.0f});
-        WALL_BODIES[3]->update_geometry(1.0f, height);
+    // Bottom wall
+    BODIES.emplace_back(width, 1.0f, true);
+    WALL_BODIES.push_back(&BODIES.back());
+    WALL_BODIES.back()->m_pos = Vec2(width / 2.0f, 0.5f);
+
+    // Top wall
+    BODIES.emplace_back(width, 1.0f, true);
+    WALL_BODIES.push_back(&BODIES.back());
+    WALL_BODIES.back()->m_pos = Vec2(width / 2.0f, height - 0.5f);
+
+    // Left wall
+    BODIES.emplace_back(1.0f, height, true);
+    WALL_BODIES.push_back(&BODIES.back());
+    WALL_BODIES.back()->m_pos = Vec2(0.5f, height / 2.0f);
+
+    // Right wall
+    BODIES.emplace_back(1.0f, height, true);
+    WALL_BODIES.push_back(&BODIES.back());
+    WALL_BODIES.back()->m_pos = Vec2(width - 0.5f, height / 2.0f);
+
+    for (auto *wall : WALL_BODIES)
+    {
+        wall->update_aabb();
     }
 }
 
-emscripten::val get_wall_body_indices() {
+emscripten::val get_wall_body_indices()
+{
     emscripten::val result = emscripten::val::array();
-    for (int i = 0; i < WALL_BODIES.size(); ++i) {
-        const auto& body = WALL_BODIES[i];
+    for (int i = 0; i < WALL_BODIES.size(); ++i)
+    {
+        const auto &body = WALL_BODIES[i];
         int index = static_cast<int>(body - &BODIES[0]);
         result.set(i, index);
     }
     return result;
 }
 
+emscripten::val get_all_forces_for_visualization()
+{
+    std::set<ForceRegistry *> uniqueForces;
 
+    for (const auto &body : BODIES)
+    {
+        for (auto *force : body.m_f_registry)
+        {
+            uniqueForces.insert(force);
+        }
+    }
+
+    emscripten::val result = emscripten::val::array();
+    int index = 0;
+
+    for (auto *force : uniqueForces)
+    {
+        emscripten::val forceInfo = emscripten::val::object();
+
+        forceInfo.set("id", index++);
+
+        Spring *spring = dynamic_cast<Spring *>(force);
+        Motor *motor = dynamic_cast<Motor *>(force);
+        Gravity *gravity = dynamic_cast<Gravity *>(force);
+
+        if (spring)
+        {
+            forceInfo.set("type", "spring");
+
+            if (spring->m_two_b_spring)
+            {
+                int bodyAIndex = -1, bodyBIndex = -1;
+
+                for (size_t i = 0; i < BODIES.size(); i++)
+                {
+                    if (&BODIES[i] == spring->m_rb_a)
+                        bodyAIndex = i;
+                    if (&BODIES[i] == spring->m_rb_b)
+                        bodyBIndex = i;
+                }
+
+                forceInfo.set("bodyAIndex", bodyAIndex);
+                forceInfo.set("bodyBIndex", bodyBIndex);
+
+                Vec2 worldAnchorA = PhysicsMath::transform(spring->m_loc_anchor_a, spring->m_rb_a->m_pos, spring->m_rb_a->m_angle);
+                Vec2 worldAnchorB = PhysicsMath::transform(spring->m_loc_anchor_b, spring->m_rb_b->m_pos, spring->m_rb_b->m_angle);
+
+                forceInfo.set("pointA", emscripten::val::object());
+                forceInfo["pointA"].set("x", worldAnchorA.m_x);
+                forceInfo["pointA"].set("y", worldAnchorA.m_y);
+
+                forceInfo.set("pointB", emscripten::val::object());
+                forceInfo["pointB"].set("x", worldAnchorB.m_x);
+                forceInfo["pointB"].set("y", worldAnchorB.m_y);
+            }
+            else
+            {
+                int bodyIndex = -1;
+                for (size_t i = 0; i < BODIES.size(); i++)
+                {
+                    if (&BODIES[i] == spring->m_rb_a)
+                        bodyIndex = i;
+                }
+
+                forceInfo.set("bodyIndex", bodyIndex);
+
+                Vec2 worldAnchorA = spring->m_rb_a->m_pos + spring->m_loc_anchor_a;
+
+                forceInfo.set("pointA", emscripten::val::object());
+                forceInfo["pointA"].set("x", worldAnchorA.m_x);
+                forceInfo["pointA"].set("y", worldAnchorA.m_y);
+
+                forceInfo.set("pointB", emscripten::val::object());
+                forceInfo["pointB"].set("x", spring->m_anchor.m_x);
+                forceInfo["pointB"].set("y", spring->m_anchor.m_y);
+            }
+
+            forceInfo.set("stiffness", spring->m_stiffness);
+            forceInfo.set("damping", spring->m_damping);
+            forceInfo.set("restLength", spring->m_equilibrium_len);
+        }
+        else if (motor)
+        {
+            forceInfo.set("type", "motor");
+
+            int bodyIndex = -1;
+            for (size_t i = 0; i < BODIES.size(); i++)
+            {
+                for (auto *f : BODIES[i].m_f_registry)
+                {
+                    if (f == motor)
+                    {
+                        bodyIndex = i;
+                        break;
+                    }
+                }
+                if (bodyIndex >= 0)
+                    break;
+            }
+
+            forceInfo.set("bodyIndex", bodyIndex);
+            forceInfo.set("targetAngularVelocity", motor->m_target_ang_vel);
+        }
+        else if (gravity)
+        {
+            forceInfo.set("type", "gravity");
+
+            emscripten::val affectedBodies = emscripten::val::array();
+            int bodyCount = 0;
+
+            for (size_t i = 0; i < BODIES.size(); i++)
+            {
+                for (auto *f : BODIES[i].m_f_registry)
+                {
+                    if (f == gravity)
+                    {
+                        affectedBodies.set(bodyCount++, i);
+                        break;
+                    }
+                }
+            }
+
+            forceInfo.set("affectedBodies", affectedBodies);
+        }
+        else
+        {
+            forceInfo.set("type", "unknown");
+        }
+
+        result.set(index - 1, forceInfo);
+    }
+
+    return result;
+}
 
 EMSCRIPTEN_BINDINGS(physics_engine)
 {
@@ -248,22 +658,26 @@ EMSCRIPTEN_BINDINGS(physics_engine)
 
     register_vector<Vec2Wrapper>("VectorVec2");
     register_vector<float>("VectorFloat");
-    register_vector<int>("VectorInt"); 
+    register_vector<int>("VectorInt");
 
     enum_<ShapeType>("ShapeType")
         .value("BOX", ShapeType::BOX)
         .value("CIRCLE", ShapeType::CIRCLE);
 
+    // core functions
     function("step", &step);
-    function("setDT", &set_dt);
+    function("setDT", &setDT);
+    function("getDT", &getDT);
     function("setPaused", &set_paused);
 
+    // body creation/removal
     function("addCircleBody", &add_circle_body);
     function("addBoxBody", &add_box_body);
     function("removeBody", &remove_body);
     function("clearBodies", &clear_bodies);
     function("getBodyCount", &get_body_count);
 
+    // body properties
     function("setBodyPosition", &set_body_position);
     function("setBodyVelocity", &set_body_velocity);
     function("setBodyAngle", &set_body_angle);
@@ -271,8 +685,11 @@ EMSCRIPTEN_BINDINGS(physics_engine)
     function("setBodyRestitution", &set_body_restitution);
     function("setBodyFriction", &set_body_friction);
 
+    // body getters
+    function("getBodyX", &getBodyX);
+    function("getBodyY", &getBodyY);
+    function("getBodyAngle", &getBodyAngle);
     function("getBodyPos", &get_body_pos);
-    function("getBodyAngle", &get_body_angle);
     function("getBodyVel", &get_body_vel);
     function("getBodyAngularVelocity", &get_body_angular_velocity);
     function("getBodyShapeType", &get_body_shape_type);
@@ -281,9 +698,23 @@ EMSCRIPTEN_BINDINGS(physics_engine)
     function("getBodyHeight", &get_body_height);
     function("getTransformedVertices", &get_transformed_vertices);
 
-    function("getDT", &get_dt);
-
+    // forces
     function("addGravity", &add_gravity);
+    function("clearForcesOnBody", &clear_forces_on_body);
+    function("addSpringBetween", &add_spring_between_js);
+    function("addSpringToPoint", &add_spring_to_point_js);
+    function("addMotorToBody", &add_motor_to_body);
+
+    // mouse interaction
+    function("start_mouse_drag", &start_mouse_drag);
+    function("update_mouse_position", &update_mouse_position);
+    function("end_mouse_drag", &end_mouse_drag);
+    function("getBodyAtPosition", &get_body_at_position);
+
+    // environment
     function("setBounds", &set_bounds);
     function("getWallBodyIndices", &get_wall_body_indices);
+
+    // force visualization
+    function("getAllForcesForVisualization", &get_all_forces_for_visualization);
 }
