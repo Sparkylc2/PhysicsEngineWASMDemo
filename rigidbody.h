@@ -1,3 +1,6 @@
+//
+// Created by Lukas Campbell on 03/06/2025.
+//
 
 #pragma once
 #include "headers.h"
@@ -92,5 +95,9 @@ struct Rigidbody
     void update_aabb();
     void update_geometry(float width, float height);
     void update_geometry(float radius);
+
+    bool contains(const Vec2 &point);
+    bool contains_polygon(const Vec2 &point);
+    bool contains_circle(const Vec2 &point);
 
 };

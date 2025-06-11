@@ -5,6 +5,16 @@
 
 using namespace emscripten;
 
+
+extern "C" {
+    void mouseMove(float x, float y);
+    void mouseDown(float x, float y);
+    void mouseUp(float x, float y);
+    void setActiveTool(int toolId);
+    void setCircleRadius(float r);
+}
+
+
 struct Vec2Wrapper
 {
     float x, y;
@@ -21,23 +31,6 @@ static int g_draggedBodyIndex = -1;
 static Vec2 g_mousePos;
 static Spring *g_dragSpring = nullptr;
 
-int add_circle_body(float x, float y, float radius, bool is_static)
-{
-    BODIES.emplace_back(radius, is_static);
-    Rigidbody &body = BODIES.back();
-    body.m_pos = Vec2(x, y);
-    body.update_aabb();
-    return BODIES.size() - 1;
-}
-
-int add_box_body(float x, float y, float width, float height, bool is_static)
-{
-    BODIES.emplace_back(width, height, is_static);
-    Rigidbody &body = BODIES.back();
-    body.m_pos = Vec2(x, y);
-    body.update_aabb();
-    return BODIES.size() - 1;
-}
 
 int start_mouse_drag(float x, float y)
 {
@@ -145,95 +138,6 @@ int get_body_at_position(float x, float y)
     return -1;
 }
 
-void add_spring_between_js(int index_a, int index_b, float stiffness, float damping)
-{
-    if (index_a < 0 || index_a >= BODIES.size() ||
-        index_b < 0 || index_b >= BODIES.size() ||
-        index_a == index_b)
-        return;
-
-    Rigidbody *rb_a = &BODIES[index_a];
-    Rigidbody *rb_b = &BODIES[index_b];
-
-    Spring *spring = new Spring(rb_a, rb_b, Vec2(0, 0), Vec2(0, 0));
-    spring->m_stiffness = stiffness;
-    spring->m_damping = damping;
-
-    rb_a->m_f_registry.push_back(spring);
-    rb_b->m_f_registry.push_back(spring);
-}
-
-void add_spring_between(int index_a, int index_b, const Vec2 &world_anchor_a, const Vec2 &world_anchor_b, float stiffness, float damping)
-{
-    if (index_a < 0 || index_a >= BODIES.size() ||
-        index_b < 0 || index_b >= BODIES.size() ||
-        index_a == index_b)
-        return;
-
-    Rigidbody *rb_a = &BODIES[index_a];
-    Rigidbody *rb_b = &BODIES[index_b];
-
-    Spring *spring = new Spring(rb_a, rb_b, world_anchor_a, world_anchor_b);
-    spring->m_stiffness = stiffness;
-    spring->m_damping = damping;
-
-    rb_a->m_f_registry.push_back(spring);
-    rb_b->m_f_registry.push_back(spring);
-}
-
-
-void add_spring_to_point_js(int index, float anchor_x, float anchor_y, float stiffness, float damping)
-{
-    if (index < 0 || index >= BODIES.size())
-        return;
-
-    Rigidbody *rb = &BODIES[index];
-
-    Vec2 anchor(anchor_x, anchor_y);
-    Spring *spring = new Spring(rb, Vec2(0, 0), anchor);
-    spring->m_stiffness = stiffness;
-    spring->m_damping = damping;
-
-    rb->m_f_registry.push_back(spring);
-}
-
-void add_spring_to_point(int index, const Vec2& anchor, float stiffness, float damping)
-{
-    if (index < 0 || index >= BODIES.size())
-        return;
-
-    Rigidbody *rb = &BODIES[index];
-
-    Spring *spring = new Spring(rb, Vec2(0, 0), anchor);
-    spring->m_stiffness = stiffness;
-    spring->m_damping = damping;
-
-    rb->m_f_registry.push_back(spring);
-}
-void add_spring_to_point(int index, const Vec2& world_anchor_a, const Vec2& anchor, float stiffness, float damping)
-{
-    if (index < 0 || index >= BODIES.size())
-        return;
-
-    Rigidbody *rb = &BODIES[index];
-
-    Spring *spring = new Spring(rb, world_anchor_a, anchor);
-    spring->m_stiffness = stiffness;
-    spring->m_damping = damping;
-
-    rb->m_f_registry.push_back(spring);
-}
-
-void add_motor_to_body(int index, float target_angular_velocity)
-{
-    if (index < 0 || index >= BODIES.size())
-        return;
-
-    Rigidbody *rb = &BODIES[index];
-    Motor *motor = new Motor(rb, target_angular_velocity);
-
-    rb->m_f_registry.push_back(motor);
-}
 
 void clear_forces_on_body(int index)
 {
@@ -671,8 +575,6 @@ EMSCRIPTEN_BINDINGS(physics_engine)
     function("setPaused", &set_paused);
 
     // body creation/removal
-    function("addCircleBody", &add_circle_body);
-    function("addBoxBody", &add_box_body);
     function("removeBody", &remove_body);
     function("clearBodies", &clear_bodies);
     function("getBodyCount", &get_body_count);
@@ -699,17 +601,19 @@ EMSCRIPTEN_BINDINGS(physics_engine)
     function("getTransformedVertices", &get_transformed_vertices);
 
     // forces
-    function("addGravity", &add_gravity);
     function("clearForcesOnBody", &clear_forces_on_body);
-    function("addSpringBetween", &add_spring_between_js);
-    function("addSpringToPoint", &add_spring_to_point_js);
-    function("addMotorToBody", &add_motor_to_body);
 
     // mouse interaction
     function("start_mouse_drag", &start_mouse_drag);
     function("update_mouse_position", &update_mouse_position);
     function("end_mouse_drag", &end_mouse_drag);
     function("getBodyAtPosition", &get_body_at_position);
+
+    function("mouseMove", &mouseMove);
+    function("mouseDown", &mouseDown);
+    function("mouseUp", &mouseUp);
+    function("setActiveTool", &setActiveTool);
+    function("setCircleRadius", &setCircleRadius);
 
     // environment
     function("setBounds", &set_bounds);

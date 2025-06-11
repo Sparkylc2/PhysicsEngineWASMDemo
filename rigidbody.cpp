@@ -90,8 +90,6 @@ Vec2 Rigidbody::calculate_accel(const Vec2 &pos)
         net_f += f->get_force(this, pos);
     }
 
-    std::cout << "Net force: " << net_f.m_x << ", " << net_f.m_y << std::endl;
-
     return net_f * m_inv_mass;
 }
 
@@ -195,3 +193,36 @@ void Rigidbody::update_geometry(float radius)
 
     update_aabb();
 }
+
+
+bool Rigidbody::contains(const Vec2 &point) {
+    if (this->m_shape_type == ShapeType::CIRCLE) {
+        return this->contains_circle(point);
+    } else {
+        return this->contains_polygon(point);
+    }
+}
+
+bool Rigidbody::contains_polygon(const Vec2& point) {
+    bool inside = false;
+
+    for (size_t i = 0, j = m_transformed_verts.size() - 1; i < m_transformed_verts.size(); j = i++) {
+        const Vec2& v1 = m_transformed_verts[i];
+        const Vec2& v2 = m_transformed_verts[j];
+
+        if ((v1.m_y > point.m_y) != (v2.m_y > point.m_y) &&
+            (point.m_x < (v2.m_x - v1.m_x) * (point.m_y - v1.m_y) / (v2.m_y - v1.m_y) + v1.m_x)) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+
+bool Rigidbody::contains_circle(const Vec2& point) {
+    float distance = (this->m_pos - point).len();
+    return (distance <= this->m_radius);
+}
+
+
+

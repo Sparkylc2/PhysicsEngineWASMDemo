@@ -15,6 +15,8 @@
 #include <sstream> 
 #include <chrono>
 #include <set>
+#include <optional>
+#include <variant>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -42,3 +44,5 @@
 
 #include "collisions.h"
 #include "collision_resolution.h"
+
+#include "mouse_handler.h"
