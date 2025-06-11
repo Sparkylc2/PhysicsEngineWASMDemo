@@ -6,14 +6,6 @@
 using namespace emscripten;
 
 
-extern "C" {
-    void mouseMove(float x, float y);
-    void mouseDown(float x, float y);
-    void mouseUp(float x, float y);
-    void setActiveTool(int toolId);
-    void setCircleRadius(float r);
-}
-
 
 struct Vec2Wrapper
 {
@@ -421,7 +413,7 @@ emscripten::val get_wall_body_indices()
 
 emscripten::val get_all_forces_for_visualization()
 {
-    std::set<ForceRegistry *> uniqueForces;
+    std::set<Force *> uniqueForces;
 
     for (const auto &body : BODIES)
     {
@@ -609,11 +601,7 @@ EMSCRIPTEN_BINDINGS(physics_engine)
     function("end_mouse_drag", &end_mouse_drag);
     function("getBodyAtPosition", &get_body_at_position);
 
-    function("mouseMove", &mouseMove);
-    function("mouseDown", &mouseDown);
-    function("mouseUp", &mouseUp);
-    function("setActiveTool", &setActiveTool);
-    function("setCircleRadius", &setCircleRadius);
+
 
     // environment
     function("setBounds", &set_bounds);

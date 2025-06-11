@@ -6,16 +6,16 @@
 #include "headers.h"
 
 
-struct ForceRegistry
+struct Force
 {
     virtual Vec2 get_force(Rigidbody *r, const Vec2 &pos) = 0;
     virtual Vec2 get_application_point(Rigidbody *r, const Vec2 &pos) = 0;
 
-    virtual ~ForceRegistry() = default;
+    virtual ~Force() = default;
 };
 
 
-struct Spring : public ForceRegistry
+struct Spring : public Force
 {
     Rigidbody *m_rb_a = nullptr;
     Rigidbody *m_rb_b = nullptr;
@@ -33,20 +33,39 @@ struct Spring : public ForceRegistry
 
     Spring() = default;
 
-    Spring(Rigidbody *r, Vec2 loc_anchor_a, Vec2 anchor)
-        : m_rb_a(r), m_loc_anchor_a(loc_anchor_a), m_anchor(anchor)
+    Spring(Rigidbody *r, Vec2 anchor_a, Vec2 anchor)
+        : m_rb_a(r), m_anchor(anchor)
     {
-        m_equilibrium_len = (PhysicsMath::transform(loc_anchor_a, r->m_pos, r->m_angle) - m_anchor).len();
+        m_loc_anchor_a = PhysicsMath::transform(anchor_a - r->m_pos, Vec2(), -r->m_angle);
+        m_equilibrium_len = (anchor_a - m_anchor).len();
         m_two_b_spring = false;
     }
 
-    Spring(Rigidbody *r_a, Rigidbody *r_b, Vec2 loc_anchor_a, Vec2 loc_anchor_b)
-        : m_rb_a(r_a), m_rb_b(r_b), m_loc_anchor_a(loc_anchor_a), m_loc_anchor_b(loc_anchor_b)
+    Spring(Rigidbody *r, Vec2 anchor_a, Vec2 anchor, float stiffness, float damping)
+        : m_rb_a(r), m_anchor(anchor), m_stiffness(stiffness), m_damping(damping)
     {
+        m_loc_anchor_a = PhysicsMath::transform(anchor_a - r->m_pos, Vec2(), -r->m_angle);
+        m_equilibrium_len = (anchor_a - m_anchor).len();
+        m_two_b_spring = false;
+    }
 
-        Vec2 w_anchor_a = PhysicsMath::transform(loc_anchor_a, r_a->m_pos, r_a->m_angle);
-        Vec2 w_anchor_b = PhysicsMath::transform(loc_anchor_b, r_b->m_pos, r_b->m_angle);
-        m_equilibrium_len = (w_anchor_b - w_anchor_a).len();
+    Spring(Rigidbody *r_a, Rigidbody *r_b, Vec2 anchor_a, Vec2 anchor_b)
+        : m_rb_a(r_a), m_rb_b(r_b)
+    {
+        m_loc_anchor_a = PhysicsMath::transform(anchor_a - r_a->m_pos, Vec2(), -r_a->m_angle);
+        m_loc_anchor_b = PhysicsMath::transform(anchor_b - r_b->m_pos, Vec2(), -r_b->m_angle);
+        m_two_b_spring = true;
+        m_equilibrium_len = (anchor_b - anchor_a).len();
+    }
+
+
+    Spring(Rigidbody *r_a, Rigidbody *r_b, Vec2 anchor_a, Vec2 anchor_b, float stiffness, float damping)
+        : m_rb_a(r_a), m_rb_b(r_b), m_stiffness(stiffness), m_damping(damping)
+    {
+        m_loc_anchor_a = PhysicsMath::transform(anchor_a - r_a->m_pos, Vec2(), -r_a->m_angle);
+        m_loc_anchor_b = PhysicsMath::transform(anchor_b - r_b->m_pos, Vec2(), -r_b->m_angle);
+        m_two_b_spring = true;
+        m_equilibrium_len = (anchor_b - anchor_a).len();
     }
 
     Vec2 get_force(Rigidbody *r, const Vec2 &pos) override
@@ -107,7 +126,7 @@ struct Spring : public ForceRegistry
     }
 };
 
-struct Motor : public ForceRegistry
+struct Motor : public Force
 {
 
     Rigidbody *m_r = nullptr;
@@ -130,7 +149,7 @@ struct Motor : public ForceRegistry
 };
 
 
-struct Gravity : public ForceRegistry
+struct Gravity : public Force
 {
     Vec2 m_gravity = Vec2(0.0f, 9.81f);
 

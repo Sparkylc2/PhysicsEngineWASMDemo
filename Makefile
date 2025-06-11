@@ -1,7 +1,6 @@
 EMCC = emcc
-SRC = physics_engine.cpp physics_bindings.cpp globals.cpp rigidbody.cpp mouse_bridge.cpp mouse_handler.cpp 
+SRC = physics_engine.cpp physics_bindings.cpp globals.cpp rigidbody.cpp interaction_bridge.cpp 
 OUT = ../../../src/wasm/physics_engine.js 
-HEADERS = headers.h vec2.h enums.h aabb.h physics_math.h rigidbody.h collisions.h collision_resolution.h
 
 all:
 	$(EMCC) $(SRC) -I. -O2 \

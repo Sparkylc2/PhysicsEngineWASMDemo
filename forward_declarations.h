@@ -4,7 +4,7 @@
 #pragma once
 struct AABB;
 struct Rigidbody;
-struct ForceRegistry;
+struct Force;
 namespace Collisions
 {
     struct CollisionResult;
