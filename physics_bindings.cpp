@@ -5,8 +5,6 @@
 
 using namespace emscripten;
 
-
-
 struct Vec2Wrapper
 {
     float x, y;
@@ -21,7 +19,6 @@ extern void step();
 
 static int g_draggedBodyIndex = -1;
 static Vec2 g_mousePos;
-static Spring *g_dragSpring = nullptr;
 
 
 int start_mouse_drag(float x, float y)
@@ -58,13 +55,6 @@ int start_mouse_drag(float x, float y)
         {
             g_draggedBodyIndex = i;
 
-            if (g_dragSpring)
-                delete g_dragSpring;
-            g_dragSpring = new Spring(&body, Vec2(0, 0), g_mousePos);
-            g_dragSpring->m_stiffness = 300.0f;
-            g_dragSpring->m_damping = 10.0f;
-            body.m_f_registry.push_back(g_dragSpring);
-
             return i;
         }
     }
@@ -75,22 +65,12 @@ int start_mouse_drag(float x, float y)
 void update_mouse_position(float x, float y)
 {
     g_mousePos = Vec2(x, y);
-    if (g_dragSpring)
-    {
-        g_dragSpring->m_anchor = g_mousePos;
-    }
+
 }
 
 void end_mouse_drag()
 {
-    if (g_draggedBodyIndex >= 0 && g_draggedBodyIndex < BODIES.size() && g_dragSpring)
-    {
-        auto &registry = BODIES[g_draggedBodyIndex].m_f_registry;
-        registry.erase(std::remove(registry.begin(), registry.end(), g_dragSpring), registry.end());
-        delete g_dragSpring;
-        g_dragSpring = nullptr;
-    }
-    g_draggedBodyIndex = -1;
+ 
 }
 
 int get_body_at_position(float x, float y)
@@ -130,17 +110,16 @@ int get_body_at_position(float x, float y)
     return -1;
 }
 
-
 void clear_forces_on_body(int index)
 {
     if (index < 0 || index >= BODIES.size())
         return;
 
     Rigidbody &body = BODIES[index];
-    for (auto *force : body.m_f_registry)
-    {
-        delete force;
-    }
+    // for (auto &force : body.m_f_registry)
+    // {
+    //     // delete force;
+    // }
     body.m_f_registry.clear();
 }
 
@@ -342,7 +321,7 @@ void add_gravity(int index)
 {
     if (index >= 0 && index < BODIES.size())
     {
-        BODIES[index].m_f_registry.push_back(new Gravity());
+        BODIES[index].m_f_registry.push_back(std::make_shared<Gravity>());
     }
 }
 
@@ -358,20 +337,28 @@ void set_bounds(float width, float height)
         return;
     }
 
-    if (!WALL_BODIES.empty())
+    std::vector<size_t> wallIndices;
+    for (auto *wall : WALL_BODIES)
     {
-        for (auto *wall : WALL_BODIES)
+        for (size_t i = 0; i < BODIES.size(); i++)
         {
-            auto it = std::find_if(BODIES.begin(), BODIES.end(),
-                                   [wall](const Rigidbody &body)
-                                   { return &body == wall; });
-            if (it != BODIES.end())
+            if (&BODIES[i] == wall)
             {
-                BODIES.erase(it);
+                wallIndices.push_back(i);
+                break;
             }
         }
-        WALL_BODIES.clear();
     }
+
+    std::sort(wallIndices.begin(), wallIndices.end(), std::greater<size_t>());
+
+    for (size_t index : wallIndices)
+    {
+        clear_forces_on_body(index);
+        BODIES.erase(BODIES.begin() + index);
+    }
+
+    WALL_BODIES.clear();
 
     // Bottom wall
     BODIES.emplace_back(width, 1.0f, true);
@@ -411,139 +398,139 @@ emscripten::val get_wall_body_indices()
     return result;
 }
 
-emscripten::val get_all_forces_for_visualization()
+void get_all_forces_for_visualization()
 {
-    std::set<Force *> uniqueForces;
+//     std::set<Force *> uniqueForces;
 
-    for (const auto &body : BODIES)
-    {
-        for (auto *force : body.m_f_registry)
-        {
-            uniqueForces.insert(force);
-        }
-    }
+//     for (const auto &body : BODIES)
+//     {
+//         for (auto &force : body.m_f_registry)
+//         {
+//             // uniqueForces.insert(force);
+//         }
+//     }
 
-    emscripten::val result = emscripten::val::array();
-    int index = 0;
+//     emscripten::val result = emscripten::val::array();
+//     int index = 0;
 
-    for (auto *force : uniqueForces)
-    {
-        emscripten::val forceInfo = emscripten::val::object();
+//     for (auto *force : uniqueForces)
+// {
+//         emscripten::val forceInfo = emscripten::val::object();
 
-        forceInfo.set("id", index++);
+//         forceInfo.set("id", index++);
 
-        Spring *spring = dynamic_cast<Spring *>(force);
-        Motor *motor = dynamic_cast<Motor *>(force);
-        Gravity *gravity = dynamic_cast<Gravity *>(force);
+//         Spring *spring = dynamic_cast<Spring *>(force);
+//         Motor *motor = dynamic_cast<Motor *>(force);
+//         Gravity *gravity = dynamic_cast<Gravity *>(force);
 
-        if (spring)
-        {
-            forceInfo.set("type", "spring");
+//         if (spring)
+//         {
+//             forceInfo.set("type", "spring");
 
-            if (spring->m_two_b_spring)
-            {
-                int bodyAIndex = -1, bodyBIndex = -1;
+//             if (spring->m_two_b_spring)
+//             {
+//                 int bodyAIndex = -1, bodyBIndex = -1;
 
-                for (size_t i = 0; i < BODIES.size(); i++)
-                {
-                    if (&BODIES[i] == spring->m_rb_a)
-                        bodyAIndex = i;
-                    if (&BODIES[i] == spring->m_rb_b)
-                        bodyBIndex = i;
-                }
+//                 for (size_t i = 0; i < BODIES.size(); i++)
+//                 {
+//                     if (&BODIES[i] == spring->m_rb_a)
+//                         bodyAIndex = i;
+//                     if (&BODIES[i] == spring->m_rb_b)
+//                         bodyBIndex = i;
+//                 }
 
-                forceInfo.set("bodyAIndex", bodyAIndex);
-                forceInfo.set("bodyBIndex", bodyBIndex);
+//                 forceInfo.set("bodyAIndex", bodyAIndex);
+//                 forceInfo.set("bodyBIndex", bodyBIndex);
 
-                Vec2 worldAnchorA = PhysicsMath::transform(spring->m_loc_anchor_a, spring->m_rb_a->m_pos, spring->m_rb_a->m_angle);
-                Vec2 worldAnchorB = PhysicsMath::transform(spring->m_loc_anchor_b, spring->m_rb_b->m_pos, spring->m_rb_b->m_angle);
+//                 Vec2 worldAnchorA = PhysicsMath::transform(spring->m_loc_anchor_a, spring->m_rb_a->m_pos, spring->m_rb_a->m_angle);
+//                 Vec2 worldAnchorB = PhysicsMath::transform(spring->m_loc_anchor_b, spring->m_rb_b->m_pos, spring->m_rb_b->m_angle);
 
-                forceInfo.set("pointA", emscripten::val::object());
-                forceInfo["pointA"].set("x", worldAnchorA.m_x);
-                forceInfo["pointA"].set("y", worldAnchorA.m_y);
+//                 forceInfo.set("pointA", emscripten::val::object());
+//                 forceInfo["pointA"].set("x", worldAnchorA.m_x);
+//                 forceInfo["pointA"].set("y", worldAnchorA.m_y);
 
-                forceInfo.set("pointB", emscripten::val::object());
-                forceInfo["pointB"].set("x", worldAnchorB.m_x);
-                forceInfo["pointB"].set("y", worldAnchorB.m_y);
-            }
-            else
-            {
-                int bodyIndex = -1;
-                for (size_t i = 0; i < BODIES.size(); i++)
-                {
-                    if (&BODIES[i] == spring->m_rb_a)
-                        bodyIndex = i;
-                }
+//                 forceInfo.set("pointB", emscripten::val::object());
+//                 forceInfo["pointB"].set("x", worldAnchorB.m_x);
+//                 forceInfo["pointB"].set("y", worldAnchorB.m_y);
+//             }
+//             else
+//             {
+//                 int bodyIndex = -1;
+//                 for (size_t i = 0; i < BODIES.size(); i++)
+//                 {
+//                     if (&BODIES[i] == spring->m_rb_a)
+//                         bodyIndex = i;
+//                 }
 
-                forceInfo.set("bodyIndex", bodyIndex);
+//                 forceInfo.set("bodyIndex", bodyIndex);
 
-                Vec2 worldAnchorA = spring->m_rb_a->m_pos + spring->m_loc_anchor_a;
+//                 Vec2 worldAnchorA = spring->m_rb_a->m_pos + spring->m_loc_anchor_a;
 
-                forceInfo.set("pointA", emscripten::val::object());
-                forceInfo["pointA"].set("x", worldAnchorA.m_x);
-                forceInfo["pointA"].set("y", worldAnchorA.m_y);
+//                 forceInfo.set("pointA", emscripten::val::object());
+//                 forceInfo["pointA"].set("x", worldAnchorA.m_x);
+//                 forceInfo["pointA"].set("y", worldAnchorA.m_y);
 
-                forceInfo.set("pointB", emscripten::val::object());
-                forceInfo["pointB"].set("x", spring->m_anchor.m_x);
-                forceInfo["pointB"].set("y", spring->m_anchor.m_y);
-            }
+//                 forceInfo.set("pointB", emscripten::val::object());
+//                 forceInfo["pointB"].set("x", spring->m_anchor.m_x);
+//                 forceInfo["pointB"].set("y", spring->m_anchor.m_y);
+//             }
 
-            forceInfo.set("stiffness", spring->m_stiffness);
-            forceInfo.set("damping", spring->m_damping);
-            forceInfo.set("restLength", spring->m_equilibrium_len);
-        }
-        else if (motor)
-        {
-            forceInfo.set("type", "motor");
+//             forceInfo.set("stiffness", spring->m_stiffness);
+//             forceInfo.set("damping", spring->m_damping);
+//             forceInfo.set("restLength", spring->m_equilibrium_len);
+//         }
+//         else if (motor)
+//         {
+//             forceInfo.set("type", "motor");
 
-            int bodyIndex = -1;
-            for (size_t i = 0; i < BODIES.size(); i++)
-            {
-                for (auto *f : BODIES[i].m_f_registry)
-                {
-                    if (f == motor)
-                    {
-                        bodyIndex = i;
-                        break;
-                    }
-                }
-                if (bodyIndex >= 0)
-                    break;
-            }
+//             int bodyIndex = -1;
+//             for (size_t i = 0; i < BODIES.size(); i++)
+//             {
+//                 for (auto &f : BODIES[i].m_f_registry)
+//                 {
+//                     if (f == motor)
+//                     {
+//                         bodyIndex = i;
+//                         break;
+//                     }
+//                 }
+//                 if (bodyIndex >= 0)
+//                     break;
+//             }
 
-            forceInfo.set("bodyIndex", bodyIndex);
-            forceInfo.set("targetAngularVelocity", motor->m_target_ang_vel);
-        }
-        else if (gravity)
-        {
-            forceInfo.set("type", "gravity");
+//             forceInfo.set("bodyIndex", bodyIndex);
+//             forceInfo.set("targetAngularVelocity", motor->m_target_ang_vel);
+//         }
+//         else if (gravity)
+//         {
+//             forceInfo.set("type", "gravity");
 
-            emscripten::val affectedBodies = emscripten::val::array();
-            int bodyCount = 0;
+//             emscripten::val affectedBodies = emscripten::val::array();
+//             int bodyCount = 0;
 
-            for (size_t i = 0; i < BODIES.size(); i++)
-            {
-                for (auto *f : BODIES[i].m_f_registry)
-                {
-                    if (f == gravity)
-                    {
-                        affectedBodies.set(bodyCount++, i);
-                        break;
-                    }
-                }
-            }
+//             for (size_t i = 0; i < BODIES.size(); i++)
+//             {
+//                 for (auto &f : BODIES[i].m_f_registry)
+//                 {
+//                     if (f == gravity)
+//                     {
+//                         affectedBodies.set(bodyCount++, i);
+//                         break;
+//                     }
+//                 }
+//             }
 
-            forceInfo.set("affectedBodies", affectedBodies);
-        }
-        else
-        {
-            forceInfo.set("type", "unknown");
-        }
+//             forceInfo.set("affectedBodies", affectedBodies);
+//         }
+//         else
+//         {
+//             forceInfo.set("type", "unknown");
+//         }
 
-        result.set(index - 1, forceInfo);
-    }
+//         result.set(index - 1, forceInfo);
+//     }
 
-    return result;
+    // return result;
 }
 
 EMSCRIPTEN_BINDINGS(physics_engine)
@@ -600,8 +587,6 @@ EMSCRIPTEN_BINDINGS(physics_engine)
     function("update_mouse_position", &update_mouse_position);
     function("end_mouse_drag", &end_mouse_drag);
     function("getBodyAtPosition", &get_body_at_position);
-
-
 
     // environment
     function("setBounds", &set_bounds);

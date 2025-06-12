@@ -30,7 +30,7 @@ struct Rigidbody
     std::vector<Vec2> m_verts;
     std::vector<Vec2> m_transformed_verts;
 
-    std::vector<Force*> m_f_registry;
+    std::vector<std::shared_ptr<Force>> m_f_registry;
 
     bool m_transform_update_req = true;
     bool m_aabb_update_req = true;

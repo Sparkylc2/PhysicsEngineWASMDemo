@@ -75,6 +75,9 @@ void narrow_phase()
 
 void step()
 {
+    if (IS_PAUSED)
+        return;
+
     if (DEBUG)
     {
         std::stringstream ss = std::stringstream();

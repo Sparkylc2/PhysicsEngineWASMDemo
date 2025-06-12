@@ -78,7 +78,7 @@ struct CircleEvent : public Event
         rb.m_is_static = m_static;
         if (m_gravity_enabled)
         {
-            rb.m_f_registry.push_back(new Gravity());
+            rb.m_f_registry.push_back(std::make_shared<Gravity>());
         }
         BODIES.push_back(rb);
         m_is_handled = true;
@@ -112,7 +112,7 @@ struct BoxEvent : public Event
         rb.m_is_static = m_static;
         if (m_gravity_enabled)
         {
-            rb.m_f_registry.push_back(new Gravity());
+            rb.m_f_registry.push_back(std::make_shared<Gravity>());
         }
         BODIES.push_back(rb);
         m_is_handled = true;
@@ -132,32 +132,57 @@ struct SpringEvent : public Event
     Vec2 m_anchor_a = Vec2();
     Vec2 m_anchor_b = Vec2();
 
+    Vec2 m_pos_a = Vec2();
+    Vec2 m_pos_b = Vec2();
+
+    float m_angle_a = 0.0f;
+    float m_angle_b = 0.0f;
+
     float m_stiffness = 1.0f;
     float m_damping = 0.1f;
 
-    SpringEvent(Rigidbody *rb_a, Rigidbody *rb_b, const Vec2 &anchor_a, const Vec2 &anchor_b, float stiffness, float damping)
-        : m_rb_a(rb_a), m_rb_b(rb_b), m_anchor_a(anchor_a), m_anchor_b(anchor_b), m_stiffness(stiffness), m_damping(damping)
-    {
-        m_type = EventType::CreateSpring;
-    }
+    // SpringEvent(Rigidbody *rb_a, Rigidbody *rb_b, const Vec2 &anchor_a, const Vec2 &anchor_b, float stiffness, float damping)
+    //     : m_rb_a(rb_a), m_rb_b(rb_b), m_anchor_a(anchor_a), m_anchor_b(anchor_b), m_stiffness(stiffness), m_damping(damping)
+    // {
+    //     m_type = EventType::CreateSpring;
+    // }
 
     void handle() override
     {
         if (m_rb_a && m_rb_b)
         {
-            Spring *spring = new Spring(m_rb_a, m_rb_b, m_anchor_a, m_anchor_b, m_stiffness, m_damping);
+            auto spring = std::make_shared<Spring>();
+
+            spring->m_loc_anchor_a = m_anchor_a;
+            spring->m_loc_anchor_b = m_anchor_b;
+            spring->m_rb_a = m_rb_a;
+            spring->m_rb_b = m_rb_b;
+            spring->m_stiffness = m_stiffness;
+            spring->m_damping = m_damping;
+            spring->m_two_b_spring = true;
+
+            Vec2 anchor_a = PhysicsMath::transform(m_anchor_a, m_pos_a, m_angle_a);
+            Vec2 anchor_b = PhysicsMath::transform(m_anchor_b, m_pos_b, m_angle_b);
+            spring->m_equilibrium_len = (anchor_b - anchor_a).len();
+
             m_rb_a->m_f_registry.push_back(spring);
             m_rb_b->m_f_registry.push_back(spring);
         }
         else if (m_rb_a && !m_rb_b)
         {
-            Spring *spring = new Spring(m_rb_a, m_anchor_a, m_anchor_b, m_stiffness, m_damping);
+            auto spring = std::make_shared<Spring>();
+
+            spring->m_loc_anchor_a = m_anchor_a;
+            spring->m_anchor = m_anchor_b;
+            spring->m_rb_a = m_rb_a;
+            spring->m_stiffness = m_stiffness;
+            spring->m_damping = m_damping;
+            spring->m_two_b_spring = false;
+
+            Vec2 anchor_a = PhysicsMath::transform(m_anchor_a, m_pos_a, m_angle_a);
+            spring->m_equilibrium_len = (anchor_a - m_anchor_b).len();
+
             m_rb_a->m_f_registry.push_back(spring);
-        }
-        else if (!m_rb_a && m_rb_b)
-        {
-            Spring *spring = new Spring(m_rb_b, m_anchor_b, m_anchor_a, m_stiffness, m_damping);
-            m_rb_b->m_f_registry.push_back(spring);
         }
         m_is_handled = true;
     }
@@ -183,8 +208,7 @@ struct MotorEvent : public Event
     {
         if (m_rb)
         {
-            Motor *motor = new Motor(m_rb, m_speed);
-            m_rb->m_f_registry.push_back(motor);
+            m_rb->m_f_registry.push_back(std::make_shared<Motor>(m_rb, m_speed));
         }
         m_is_handled = true;
     }
@@ -219,7 +243,6 @@ void process_events()
         }
     }
 }
-
 
 bool is_wall_body(const Rigidbody *body)
 {
@@ -256,6 +279,9 @@ emscripten::val get_bodies_for_render()
 
     for (size_t i = 0; i < BODIES.size(); ++i)
     {
+        if (is_wall_body(&BODIES[i]))
+            continue;
+
         const Rigidbody &rb = BODIES[i];
         emscripten::val body_obj = emscripten::val::object();
 
@@ -287,23 +313,23 @@ emscripten::val get_bodies_for_render()
 emscripten::val get_forces_for_render()
 {
     emscripten::val forces = emscripten::val::array();
-
-    std::set<Force *> processed_forces;
+    
+    std::set<std::shared_ptr<Force>> processed_forces;
 
     for (size_t i = 0; i < BODIES.size(); ++i)
     {
         const Rigidbody &rb = BODIES[i];
 
-        for (const Force *f : rb.m_f_registry)
+        for (const auto& force_ptr : rb.m_f_registry)
         {
-            if (processed_forces.find(const_cast<Force *>(f)) != processed_forces.end())
+            if (processed_forces.find(force_ptr) != processed_forces.end())
                 continue;
 
-            processed_forces.insert(const_cast<Force *>(f));
+            processed_forces.insert(force_ptr);
 
             emscripten::val force_obj = emscripten::val::object();
 
-            if (const Spring *spring = dynamic_cast<const Spring *>(f))
+            if (const Spring* spring = dynamic_cast<const Spring*>(force_ptr.get()))
             {
                 if (spring->m_two_b_spring)
                 {
@@ -321,15 +347,18 @@ emscripten::val get_forces_for_render()
                 {
                     force_obj.set("type", "spring");
 
+                    std::cout << spring->m_rb_a << std::endl;
                     Vec2 world_a = PhysicsMath::transform(spring->m_loc_anchor_a, spring->m_rb_a->m_pos, spring->m_rb_a->m_angle);
 
+                    std::cout << "Spring anchor A: " << world_a.m_x << ", " << world_a.m_y << std::endl;
+                    std::cout << "loc_anchor_a: " << spring->m_loc_anchor_a.m_x << ", " << spring->m_loc_anchor_a.m_y << std::endl;
                     force_obj.set("xa", world_a.m_x);
                     force_obj.set("ya", world_a.m_y);
                     force_obj.set("xb", spring->m_anchor.m_x);
                     force_obj.set("yb", spring->m_anchor.m_y);
                 }
             }
-            else if (const Motor *motor = dynamic_cast<const Motor *>(f))
+            else if (const Motor* motor = dynamic_cast<const Motor*>(force_ptr.get()))
             {
                 force_obj.set("type", "motor");
                 force_obj.set("bodyId", static_cast<int>(i));
@@ -342,6 +371,7 @@ emscripten::val get_forces_for_render()
 
     if (g_pending_spring)
     {
+
         emscripten::val preview = emscripten::val::object();
         preview.set("type", "spring_preview");
 
@@ -354,7 +384,7 @@ emscripten::val get_forces_for_render()
         }
         else
         {
-            preview.set("xa", g_pending_spring->m_anchor_a.m_x);
+            preview.set("xa", g_pending_spring->m_anchor_b.m_x);
             preview.set("ya", g_pending_spring->m_anchor_a.m_y);
         }
 
@@ -385,28 +415,38 @@ void mouse_down(float x, float y)
         if (!g_pending_spring)
         {
             Rigidbody *rb = get_rigidbody_under_mouse(mouse_pos);
+            g_pending_spring = std::make_shared<SpringEvent>();
+
             if (rb)
             {
-                Vec2 loc_anchor = PhysicsMath::transform(mouse_pos - rb->m_pos, Vec2(), -rb->m_angle);
-                g_pending_spring = std::make_shared<SpringEvent>(rb, nullptr, loc_anchor, Vec2(), g_spring_stiffness, g_spring_damping);
+                g_pending_spring->m_rb_a = rb;
+                g_pending_spring->m_pos_a = rb->m_pos;
+                g_pending_spring->m_angle_a = rb->m_angle;
+                g_pending_spring->m_anchor_a = PhysicsMath::transform(mouse_pos - rb->m_pos, Vec2(), -rb->m_angle);
             }
             else
             {
-                g_pending_spring = std::make_shared<SpringEvent>(nullptr, nullptr, mouse_pos, Vec2(), g_spring_stiffness, g_spring_damping);
+                g_pending_spring->m_anchor_b = mouse_pos;
             }
         }
         else
         {
             Rigidbody *rb = get_rigidbody_under_mouse(mouse_pos);
+
             if (rb)
             {
                 g_pending_spring->m_rb_b = rb;
+                g_pending_spring->m_pos_b = rb->m_pos;
+                g_pending_spring->m_angle_b = rb->m_angle;
                 g_pending_spring->m_anchor_b = PhysicsMath::transform(mouse_pos - rb->m_pos, Vec2(), -rb->m_angle);
             }
             else
             {
                 g_pending_spring->m_anchor_b = mouse_pos;
             }
+
+            g_pending_spring->m_stiffness = g_spring_stiffness;
+            g_pending_spring->m_damping = g_spring_damping;
 
             add_event(g_pending_spring);
             g_pending_spring = nullptr;
@@ -476,6 +516,22 @@ void set_motor_properties(float speed)
     g_motor_speed = speed;
 }
 
+void set_is_paused(bool paused)
+{
+    std::cout << "Setting paused state to: " << paused << std::endl;
+    IS_PAUSED = paused;
+}
+
+void toggle_is_paused()
+{
+    IS_PAUSED = !IS_PAUSED;
+}
+
+bool is_paused()
+{
+    return IS_PAUSED;
+}
+
 EMSCRIPTEN_BINDINGS(physics_engine)
 {
     function("mouseDown", &mouse_down);
@@ -492,4 +548,8 @@ EMSCRIPTEN_BINDINGS(physics_engine)
     function("setCircleProperties", &set_circle_properties);
     function("setSpringProperties", &set_spring_properties);
     function("setMotorProperties", &set_motor_properties);
+
+    function("setIsPaused", &set_is_paused);
+    function("toggleIsPaused", &toggle_is_paused);
+    function("isPaused", &is_paused);
 }

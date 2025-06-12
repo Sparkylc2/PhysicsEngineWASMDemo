@@ -5,7 +5,6 @@
 #pragma once
 #include "headers.h"
 
-
 struct Force
 {
     virtual Vec2 get_force(Rigidbody *r, const Vec2 &pos) = 0;
@@ -13,7 +12,6 @@ struct Force
 
     virtual ~Force() = default;
 };
-
 
 struct Spring : public Force
 {
@@ -33,40 +31,46 @@ struct Spring : public Force
 
     Spring() = default;
 
-    Spring(Rigidbody *r, Vec2 anchor_a, Vec2 anchor)
-        : m_rb_a(r), m_anchor(anchor)
-    {
-        m_loc_anchor_a = PhysicsMath::transform(anchor_a - r->m_pos, Vec2(), -r->m_angle);
-        m_equilibrium_len = (anchor_a - m_anchor).len();
-        m_two_b_spring = false;
-    }
+    // Spring(Rigidbody *r, Vec2 loc_anchor_a, Vec2 anchor)
+    //     : m_rb_a(r), m_loc_anchor_a(loc_anchor_a), m_anchor(anchor)
+    // {
+    //     Vec2 anchor_a = PhysicsMath::transform(loc_anchor_a, r->m_pos, r->m_angle);
+    //     m_equilibrium_len = (anchor_a - m_anchor).len();
+    //     m_two_b_spring = false;
+    // }
 
-    Spring(Rigidbody *r, Vec2 anchor_a, Vec2 anchor, float stiffness, float damping)
-        : m_rb_a(r), m_anchor(anchor), m_stiffness(stiffness), m_damping(damping)
-    {
-        m_loc_anchor_a = PhysicsMath::transform(anchor_a - r->m_pos, Vec2(), -r->m_angle);
-        m_equilibrium_len = (anchor_a - m_anchor).len();
-        m_two_b_spring = false;
-    }
+    // Spring(Rigidbody *r, Vec2 loc_anchor_a, Vec2 anchor, float equilibrium_len, float stiffness, float damping)
+    //     : m_rb_a(r), m_loc_anchor_a(loc_anchor_a), m_anchor(anchor), m_equilibrium_len(equilibrium_len), m_stiffness(stiffness), m_damping(damping)
+    // {
+    //     Vec2 anchor_a = PhysicsMath::transform(loc_anchor_a, r->m_pos, r->m_angle);
+    //     m_two_b_spring = false;
+    // }
 
-    Spring(Rigidbody *r_a, Rigidbody *r_b, Vec2 anchor_a, Vec2 anchor_b)
-        : m_rb_a(r_a), m_rb_b(r_b)
-    {
-        m_loc_anchor_a = PhysicsMath::transform(anchor_a - r_a->m_pos, Vec2(), -r_a->m_angle);
-        m_loc_anchor_b = PhysicsMath::transform(anchor_b - r_b->m_pos, Vec2(), -r_b->m_angle);
-        m_two_b_spring = true;
-        m_equilibrium_len = (anchor_b - anchor_a).len();
-    }
+    // Spring(Rigidbody *r, Vec2 loc_anchor_a, Vec2 anchor, float stiffness, float damping)
+    //     : m_rb_a(r), m_loc_anchor_a(loc_anchor_a), m_anchor(anchor), m_stiffness(stiffness), m_damping(damping)
+    // {
+    //     Vec2 anchor_a = PhysicsMath::transform(loc_anchor_a, r->m_pos, r->m_angle);
+    //     m_equilibrium_len = (anchor_a - m_anchor).len();
+    //     m_two_b_spring = false;
+    // }
 
+    // Spring(Rigidbody *r_a, Rigidbody *r_b, Vec2 anchor_a, Vec2 anchor_b)
+    //     : m_rb_a(r_a), m_rb_b(r_b)
+    // {
+    //     m_loc_anchor_a = PhysicsMath::transform(anchor_a - r_a->m_pos, Vec2(), -r_a->m_angle);
+    //     m_loc_anchor_b = PhysicsMath::transform(anchor_b - r_b->m_pos, Vec2(), -r_b->m_angle);
+    //     m_two_b_spring = true;
+    //     m_equilibrium_len = (anchor_b - anchor_a).len();
+    // }
 
-    Spring(Rigidbody *r_a, Rigidbody *r_b, Vec2 anchor_a, Vec2 anchor_b, float stiffness, float damping)
-        : m_rb_a(r_a), m_rb_b(r_b), m_stiffness(stiffness), m_damping(damping)
-    {
-        m_loc_anchor_a = PhysicsMath::transform(anchor_a - r_a->m_pos, Vec2(), -r_a->m_angle);
-        m_loc_anchor_b = PhysicsMath::transform(anchor_b - r_b->m_pos, Vec2(), -r_b->m_angle);
-        m_two_b_spring = true;
-        m_equilibrium_len = (anchor_b - anchor_a).len();
-    }
+    // Spring(Rigidbody *r_a, Rigidbody *r_b, Vec2 anchor_a, Vec2 anchor_b, float stiffness, float damping)
+    //     : m_rb_a(r_a), m_rb_b(r_b), m_stiffness(stiffness), m_damping(damping)
+    // {
+    //     m_loc_anchor_a = PhysicsMath::transform(anchor_a - r_a->m_pos, Vec2(), -r_a->m_angle);
+    //     m_loc_anchor_b = PhysicsMath::transform(anchor_b - r_b->m_pos, Vec2(), -r_b->m_angle);
+    //     m_two_b_spring = true;
+    //     m_equilibrium_len = (anchor_b - anchor_a).len();
+    // }
 
     Vec2 get_force(Rigidbody *r, const Vec2 &pos) override
     {
@@ -109,7 +113,7 @@ struct Spring : public Force
 
         float f = (displacement - m_equilibrium_len) * m_stiffness;
         f += dir.dot(other_vel - parent_vel) * m_damping;
-        
+
         return dir * f;
     }
 
@@ -147,7 +151,6 @@ struct Motor : public Force
         return PhysicsMath::transform(Vec2(), pos, r->m_angle);
     }
 };
-
 
 struct Gravity : public Force
 {
