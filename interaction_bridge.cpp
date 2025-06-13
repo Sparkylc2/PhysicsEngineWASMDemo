@@ -116,6 +116,7 @@ struct BoxEvent : public Event
         Rigidbody &m_rb = BODIES.back();
         m_rb.m_pos = m_pos;
         m_rb.m_is_static = m_static;
+        m_rb.m_restitution = 1.0f;
         if (m_gravity_enabled)
         {
             m_rb.m_f_registry.emplace_back(std::make_shared<Gravity>());
@@ -146,14 +147,13 @@ struct SpringEvent : public Event
     float m_stiffness = 1.0f;
     float m_damping = 0.1f;
 
-    // SpringEvent(Rigidbody *rb_a, Rigidbody *rb_b, const Vec2 &anchor_a, const Vec2 &anchor_b, float stiffness, float damping)
-    //     : m_rb_a(rb_a), m_rb_b(rb_b), m_anchor_a(anchor_a), m_anchor_b(anchor_b), m_stiffness(stiffness), m_damping(damping)
-    // {
-    //     m_type = EventType::CreateSpring;
-    // }
-
     void handle() override
     {
+        if (m_rb_a == m_rb_b)
+        {
+            m_is_handled = true;
+            return;
+        }
         if (m_rb_a && m_rb_b)
         {
             auto spring = std::make_shared<Spring>();
@@ -173,7 +173,7 @@ struct SpringEvent : public Event
             m_rb_a->m_f_registry.emplace_back(spring);
             m_rb_b->m_f_registry.emplace_back(spring);
         }
-        else if (m_rb_a && !m_rb_b)
+        else if ((m_rb_a && !m_rb_b) || (!m_rb_a && m_rb_b))
         {
             auto spring = std::make_shared<Spring>();
 
@@ -352,11 +352,8 @@ emscripten::val get_forces_for_render()
                 {
                     force_obj.set("type", "spring");
 
-                    std::cout << spring->m_rb_a << std::endl;
                     Vec2 world_a = PhysicsMath::transform(spring->m_loc_anchor_a, spring->m_rb_a->m_pos, spring->m_rb_a->m_angle);
 
-                    std::cout << "Spring anchor A: " << world_a.m_x << ", " << world_a.m_y << std::endl;
-                    std::cout << "loc_anchor_a: " << spring->m_loc_anchor_a.m_x << ", " << spring->m_loc_anchor_a.m_y << std::endl;
                     force_obj.set("xa", world_a.m_x);
                     force_obj.set("ya", world_a.m_y);
                     force_obj.set("xb", spring->m_anchor.m_x);
@@ -434,7 +431,14 @@ void mouse_down(float x, float y)
         {
             Rigidbody *rb = get_rigidbody_under_mouse(mouse_pos);
 
-            if (rb)
+            if (rb && !g_pending_spring->m_rb_a)
+            {
+                g_pending_spring->m_rb_a = rb;
+                g_pending_spring->m_pos_a = rb->m_pos;
+                g_pending_spring->m_angle_a = rb->m_angle;
+                g_pending_spring->m_anchor_a = PhysicsMath::transform(mouse_pos - rb->m_pos, Vec2(), -rb->m_angle);
+            }
+            else if (rb)
             {
                 g_pending_spring->m_rb_b = rb;
                 g_pending_spring->m_pos_b = rb->m_pos;
@@ -474,7 +478,7 @@ void mouse_move(float x, float y)
 {
     if (g_pending_spring)
     {
-        g_pending_spring->m_anchor_b = Vec2(x, y);
+        // g_pending_spring->m_anchor_b = Vec2(x, y);
     }
 }
 
@@ -484,14 +488,11 @@ void mouse_up(float x, float y)
 
 void set_active_tool(int tool_id)
 {
-    if (g_active_tool == static_cast<ActiveTool>(tool_id) && g_active_tool == ActiveTool::Spring)
+    ActiveTool new_tool = static_cast<ActiveTool>(tool_id);
+
+    if (new_tool == g_active_tool)
     {
         return;
-    }
-
-    if (g_active_tool == static_cast<ActiveTool>(tool_id) || g_active_tool != ActiveTool::Spring)
-    {
-        g_pending_spring = nullptr;
     }
 
     g_active_tool = static_cast<ActiveTool>(tool_id);
