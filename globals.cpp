@@ -7,6 +7,7 @@ float DT = 0.01f;
 bool IS_PAUSED = false;
 std::vector<std::vector<size_t>> COLLISION_PAIRS;
 std::vector<Collisions::CollisionResult> COLLISION_RESULTS;
-std::deque<Rigidbody> BODIES;
+std::vector<std::shared_ptr<Rigidbody>>  BODIES;
+
 
 std::deque<Rigidbody*> WALL_BODIES;

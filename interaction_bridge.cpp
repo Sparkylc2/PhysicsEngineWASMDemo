@@ -28,6 +28,8 @@ enum class EventType
 struct Event;
 struct SpringEvent;
 
+bool g_has_set_bounds = false;
+
 ActiveTool g_active_tool = ActiveTool::None;
 std::vector<std::shared_ptr<Event>> g_event_queue;
 std::shared_ptr<SpringEvent> g_pending_spring = nullptr;
@@ -73,19 +75,17 @@ struct CircleEvent : public Event
 
     void handle() override
     {
+        auto rb = std::make_shared<Rigidbody>(m_radius, m_static);
 
-        BODIES.emplace_back(m_radius, m_static);
-
-        Rigidbody &rb = BODIES.back();
-
-        rb.m_pos = m_pos;
-        rb.m_is_static = m_static;
+        rb->m_pos = m_pos;
+        rb->m_is_static = m_static;
 
         if (m_gravity_enabled)
         {
-            rb.m_f_registry.emplace_back(std::make_shared<Gravity>());
+            rb->m_f_registry.emplace_back(std::make_shared<Gravity>());
         }
 
+        BODIES.push_back(rb);
         m_is_handled = true;
     }
 
@@ -112,15 +112,17 @@ struct BoxEvent : public Event
 
     void handle() override
     {
-        BODIES.emplace_back(m_width, m_height, m_static);
-        Rigidbody &m_rb = BODIES.back();
-        m_rb.m_pos = m_pos;
-        m_rb.m_is_static = m_static;
-        m_rb.m_restitution = 1.0f;
+        auto rb = std::make_shared<Rigidbody>(m_width, m_height, m_static);
+
+        rb->m_pos = m_pos;
+        rb->m_is_static = m_static;
+
         if (m_gravity_enabled)
         {
-            m_rb.m_f_registry.emplace_back(std::make_shared<Gravity>());
+            rb->m_f_registry.emplace_back(std::make_shared<Gravity>());
         }
+
+        BODIES.push_back(rb);
         m_is_handled = true;
     }
 
@@ -261,19 +263,19 @@ bool is_wall_body(const Rigidbody *body)
 
 Rigidbody *get_rigidbody_under_mouse(const Vec2 &p)
 {
-    for (Rigidbody &rb : BODIES)
+    for (auto rb : BODIES)
     {
-        if (&rb == g_selected_body)
+        if (rb.get() == g_selected_body)
             continue;
 
-        if (!Collisions::intersect_aabb_with_point(rb.m_aabb, p))
+        if (!Collisions::intersect_aabb_with_point(rb->m_aabb, p))
             continue;
 
-        if (is_wall_body(&rb))
+        if (is_wall_body(rb.get()))
             continue;
 
-        if (rb.contains(p))
-            return &rb;
+        if (rb->contains(p))
+            return rb.get();
     }
     return nullptr;
 }
@@ -284,30 +286,31 @@ emscripten::val get_bodies_for_render()
 
     for (size_t i = 0; i < BODIES.size(); ++i)
     {
-        if (is_wall_body(&BODIES[i]))
+        const auto &rb = BODIES[i];
+
+        if (is_wall_body(rb.get()))
             continue;
 
-        const Rigidbody &rb = BODIES[i];
         emscripten::val body_obj = emscripten::val::object();
 
         body_obj.set("id", static_cast<int>(i));
-        body_obj.set("x", rb.m_pos.m_x);
-        body_obj.set("y", rb.m_pos.m_y);
-        body_obj.set("angle", rb.m_angle);
-        body_obj.set("type", rb.m_shape_type == ShapeType::CIRCLE ? "circle" : "box");
+        body_obj.set("x", rb->m_pos.m_x);
+        body_obj.set("y", rb->m_pos.m_y);
+        body_obj.set("angle", rb->m_angle);
+        body_obj.set("type", rb->m_shape_type == ShapeType::CIRCLE ? "circle" : "box");
 
-        if (rb.m_shape_type == ShapeType::CIRCLE)
+        if (rb->m_shape_type == ShapeType::CIRCLE)
         {
-            body_obj.set("radius", rb.m_radius);
+            body_obj.set("radius", rb->m_radius);
         }
         else
         {
-            body_obj.set("width", rb.m_width);
-            body_obj.set("height", rb.m_height);
+            body_obj.set("width", rb->m_width);
+            body_obj.set("height", rb->m_height);
         }
 
-        body_obj.set("isStatic", rb.m_is_static);
-        body_obj.set("isSelected", &rb == g_selected_body);
+        body_obj.set("isStatic", rb->m_is_static);
+        body_obj.set("isSelected", rb.get() == g_selected_body);
 
         bodies.call<void>("push", body_obj);
     }
@@ -323,9 +326,9 @@ emscripten::val get_forces_for_render()
 
     for (size_t i = 0; i < BODIES.size(); ++i)
     {
-        const Rigidbody &rb = BODIES[i];
+        const auto &rb = BODIES[i];
 
-        for (const auto &force_ptr : rb.m_f_registry)
+        for (const auto &force_ptr : rb->m_f_registry)
         {
             if (processed_forces.find(force_ptr) != processed_forces.end())
                 continue;
@@ -552,12 +555,67 @@ void set_bounds(float width, float height)
         return;
     }
 
+    if (!g_has_set_bounds)
+    {
+        const float r = 20.0f;
+        const float cx = width * 0.5f;
+        const float y = height / 2.5f;
+        const float dx = width * 0.05f;
+
+        std::vector<Vec2> pos;
+        for (int i = 0; i < 3; ++i)
+            pos.emplace_back(cx + (i + 1) * dx, y);
+
+        for (auto &p : pos)
+            add_event(std::make_shared<CircleEvent>(p, r, false, true));
+
+        // no threading here so the vec is just a stack & we can pull from the top
+        process_events();
+
+        size_t B_size = BODIES.size();
+        float spring_stiffness = 600.0f;
+        float spring_damping = 0.0f;
+
+        auto make_spring = [&](std::shared_ptr<Rigidbody> a, std::shared_ptr<Rigidbody> b)
+        {
+            auto se = std::make_shared<SpringEvent>();
+            se->m_rb_a = a.get();
+            se->m_rb_b = b.get();
+            se->m_anchor_a = Vec2();
+            se->m_anchor_b = Vec2();
+            se->m_pos_a = a->m_pos;
+            se->m_pos_b = b->m_pos;
+            se->m_angle_a = a->m_angle;
+            se->m_angle_b = b->m_angle;
+            se->m_stiffness = spring_stiffness;
+            se->m_damping = g_spring_damping;
+            add_event(se);
+
+
+        };
+
+        make_spring(BODIES[B_size - 1], BODIES[B_size - 2]);
+        make_spring(BODIES[B_size - 2], BODIES[B_size - 3]);
+
+        auto anchor_se = std::make_shared<SpringEvent>();
+        anchor_se->m_rb_a = BODIES[B_size - 3].get();
+        anchor_se->m_anchor_b = Vec2(cx, y);
+        anchor_se->m_anchor_a = Vec2();
+        anchor_se->m_pos_a = BODIES[B_size - 3]->m_pos;
+        anchor_se->m_angle_a = BODIES[B_size - 3]->m_angle;
+        anchor_se->m_stiffness = spring_stiffness;
+        anchor_se->m_damping = g_spring_damping;
+        add_event(anchor_se);
+
+        g_has_set_bounds = true;
+    }
+
     std::vector<size_t> wallIndices;
     for (auto *wall : WALL_BODIES)
     {
         for (size_t i = 0; i < BODIES.size(); i++)
         {
-            if (&BODIES[i] == wall)
+            if (BODIES[i].get() == wall)
             {
                 wallIndices.push_back(i);
                 break;
@@ -575,24 +633,28 @@ void set_bounds(float width, float height)
     WALL_BODIES.clear();
 
     // Bottom wall
-    BODIES.emplace_back(width, 1.0f, true);
-    WALL_BODIES.push_back(&BODIES.back());
-    WALL_BODIES.back()->m_pos = Vec2(width / 2.0f, 0.5f);
+    auto bottom_wall = std::make_shared<Rigidbody>(width, 1.0f, true);
+    bottom_wall->m_pos = Vec2(width / 2.0f, 0.5f);
+    BODIES.push_back(bottom_wall);
+    WALL_BODIES.push_back(bottom_wall.get());
 
     // Top wall
-    BODIES.emplace_back(width, 1.0f, true);
-    WALL_BODIES.push_back(&BODIES.back());
-    WALL_BODIES.back()->m_pos = Vec2(width / 2.0f, height - 0.5f);
+    auto top_wall = std::make_shared<Rigidbody>(width, 1.0f, true);
+    top_wall->m_pos = Vec2(width / 2.0f, height - 0.5f);
+    BODIES.push_back(top_wall);
+    WALL_BODIES.push_back(top_wall.get());
 
     // Left wall
-    BODIES.emplace_back(1.0f, height, true);
-    WALL_BODIES.push_back(&BODIES.back());
-    WALL_BODIES.back()->m_pos = Vec2(0.5f, height / 2.0f);
+    auto left_wall = std::make_shared<Rigidbody>(1.0f, height, true);
+    left_wall->m_pos = Vec2(0.5f, height / 2.0f);
+    BODIES.push_back(left_wall);
+    WALL_BODIES.push_back(left_wall.get());
 
     // Right wall
-    BODIES.emplace_back(1.0f, height, true);
-    WALL_BODIES.push_back(&BODIES.back());
-    WALL_BODIES.back()->m_pos = Vec2(width - 0.5f, height / 2.0f);
+    auto right_wall = std::make_shared<Rigidbody>(1.0f, height, true);
+    right_wall->m_pos = Vec2(width - 0.5f, height / 2.0f);
+    BODIES.push_back(right_wall);
+    WALL_BODIES.push_back(right_wall.get());
 
     for (auto *wall : WALL_BODIES)
     {
