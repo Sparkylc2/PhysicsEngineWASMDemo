@@ -10,3 +10,5 @@ namespace Collisions
     struct CollisionResult;
 }
 
+extern void step();
+

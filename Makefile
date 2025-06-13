@@ -1,5 +1,5 @@
 EMCC = emcc
-SRC = physics_engine.cpp physics_bindings.cpp globals.cpp rigidbody.cpp interaction_bridge.cpp 
+SRC = physics_engine.cpp globals.cpp rigidbody.cpp interaction_bridge.cpp 
 OUT = ../../../src/wasm/physics_engine.js 
 
 all:

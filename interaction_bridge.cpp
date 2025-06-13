@@ -73,14 +73,19 @@ struct CircleEvent : public Event
 
     void handle() override
     {
-        Rigidbody rb = Rigidbody(m_radius, m_static);
+
+        BODIES.emplace_back(m_radius, m_static);
+
+        Rigidbody &rb = BODIES.back();
+
         rb.m_pos = m_pos;
         rb.m_is_static = m_static;
+
         if (m_gravity_enabled)
         {
-            rb.m_f_registry.push_back(std::make_shared<Gravity>());
+            rb.m_f_registry.emplace_back(std::make_shared<Gravity>());
         }
-        BODIES.push_back(rb);
+
         m_is_handled = true;
     }
 
@@ -107,14 +112,14 @@ struct BoxEvent : public Event
 
     void handle() override
     {
-        Rigidbody rb = Rigidbody(m_width, m_height, m_static);
-        rb.m_pos = m_pos;
-        rb.m_is_static = m_static;
+        BODIES.emplace_back(m_width, m_height, m_static);
+        Rigidbody &m_rb = BODIES.back();
+        m_rb.m_pos = m_pos;
+        m_rb.m_is_static = m_static;
         if (m_gravity_enabled)
         {
-            rb.m_f_registry.push_back(std::make_shared<Gravity>());
+            m_rb.m_f_registry.emplace_back(std::make_shared<Gravity>());
         }
-        BODIES.push_back(rb);
         m_is_handled = true;
     }
 
@@ -165,8 +170,8 @@ struct SpringEvent : public Event
             Vec2 anchor_b = PhysicsMath::transform(m_anchor_b, m_pos_b, m_angle_b);
             spring->m_equilibrium_len = (anchor_b - anchor_a).len();
 
-            m_rb_a->m_f_registry.push_back(spring);
-            m_rb_b->m_f_registry.push_back(spring);
+            m_rb_a->m_f_registry.emplace_back(spring);
+            m_rb_b->m_f_registry.emplace_back(spring);
         }
         else if (m_rb_a && !m_rb_b)
         {
@@ -182,7 +187,7 @@ struct SpringEvent : public Event
             Vec2 anchor_a = PhysicsMath::transform(m_anchor_a, m_pos_a, m_angle_a);
             spring->m_equilibrium_len = (anchor_a - m_anchor_b).len();
 
-            m_rb_a->m_f_registry.push_back(spring);
+            m_rb_a->m_f_registry.emplace_back(spring);
         }
         m_is_handled = true;
     }
@@ -208,7 +213,7 @@ struct MotorEvent : public Event
     {
         if (m_rb)
         {
-            m_rb->m_f_registry.push_back(std::make_shared<Motor>(m_rb, m_speed));
+            m_rb->m_f_registry.emplace_back(std::make_shared<Motor>(m_rb, m_speed));
         }
         m_is_handled = true;
     }
@@ -221,7 +226,7 @@ struct MotorEvent : public Event
 
 void add_event(std::shared_ptr<Event> event)
 {
-    g_event_queue.push_back(event);
+    g_event_queue.emplace_back(event);
 }
 
 void process_events()
@@ -313,14 +318,14 @@ emscripten::val get_bodies_for_render()
 emscripten::val get_forces_for_render()
 {
     emscripten::val forces = emscripten::val::array();
-    
+
     std::set<std::shared_ptr<Force>> processed_forces;
 
     for (size_t i = 0; i < BODIES.size(); ++i)
     {
         const Rigidbody &rb = BODIES[i];
 
-        for (const auto& force_ptr : rb.m_f_registry)
+        for (const auto &force_ptr : rb.m_f_registry)
         {
             if (processed_forces.find(force_ptr) != processed_forces.end())
                 continue;
@@ -329,7 +334,7 @@ emscripten::val get_forces_for_render()
 
             emscripten::val force_obj = emscripten::val::object();
 
-            if (const Spring* spring = dynamic_cast<const Spring*>(force_ptr.get()))
+            if (const Spring *spring = dynamic_cast<const Spring *>(force_ptr.get()))
             {
                 if (spring->m_two_b_spring)
                 {
@@ -358,7 +363,7 @@ emscripten::val get_forces_for_render()
                     force_obj.set("yb", spring->m_anchor.m_y);
                 }
             }
-            else if (const Motor* motor = dynamic_cast<const Motor*>(force_ptr.get()))
+            else if (const Motor *motor = dynamic_cast<const Motor *>(force_ptr.get()))
             {
                 force_obj.set("type", "motor");
                 force_obj.set("bodyId", static_cast<int>(i));
@@ -385,7 +390,7 @@ emscripten::val get_forces_for_render()
         else
         {
             preview.set("xa", g_pending_spring->m_anchor_b.m_x);
-            preview.set("ya", g_pending_spring->m_anchor_a.m_y);
+            preview.set("ya", g_pending_spring->m_anchor_b.m_y);
         }
 
         forces.call<void>("push", preview);
@@ -397,10 +402,6 @@ emscripten::val get_forces_for_render()
 void mouse_down(float x, float y)
 {
     Vec2 mouse_pos(x, y);
-    std::cout << "Mouse down at: " << mouse_pos.m_x << ", " << mouse_pos.m_y << std::endl;
-
-    std::cout << "Active tool: " << static_cast<int>(g_active_tool) << std::endl;
-    std::cout << BODIES.size() << " bodies in the simulation." << std::endl;
     switch (g_active_tool)
     {
     case ActiveTool::Circle:
@@ -483,11 +484,17 @@ void mouse_up(float x, float y)
 
 void set_active_tool(int tool_id)
 {
-    g_active_tool = static_cast<ActiveTool>(tool_id);
-    if (g_pending_spring)
+    if (g_active_tool == static_cast<ActiveTool>(tool_id) && g_active_tool == ActiveTool::Spring)
+    {
+        return;
+    }
+
+    if (g_active_tool == static_cast<ActiveTool>(tool_id) || g_active_tool != ActiveTool::Spring)
     {
         g_pending_spring = nullptr;
     }
+
+    g_active_tool = static_cast<ActiveTool>(tool_id);
 }
 
 void set_box_properties(float width, float height, bool is_static, bool gravity)
@@ -518,7 +525,6 @@ void set_motor_properties(float speed)
 
 void set_is_paused(bool paused)
 {
-    std::cout << "Setting paused state to: " << paused << std::endl;
     IS_PAUSED = paused;
 }
 
@@ -530,6 +536,67 @@ void toggle_is_paused()
 bool is_paused()
 {
     return IS_PAUSED;
+}
+
+void set_dt(float dt)
+{
+    DT = dt;
+}
+
+void set_bounds(float width, float height)
+{
+    if (width <= 0 || height <= 0)
+    {
+        std::cout << "Invalid bounds: width=" << width << ", height=" << height << std::endl;
+        return;
+    }
+
+    std::vector<size_t> wallIndices;
+    for (auto *wall : WALL_BODIES)
+    {
+        for (size_t i = 0; i < BODIES.size(); i++)
+        {
+            if (&BODIES[i] == wall)
+            {
+                wallIndices.push_back(i);
+                break;
+            }
+        }
+    }
+
+    std::sort(wallIndices.begin(), wallIndices.end(), std::greater<size_t>());
+
+    for (size_t index : wallIndices)
+    {
+        BODIES.erase(BODIES.begin() + index);
+    }
+
+    WALL_BODIES.clear();
+
+    // Bottom wall
+    BODIES.emplace_back(width, 1.0f, true);
+    WALL_BODIES.push_back(&BODIES.back());
+    WALL_BODIES.back()->m_pos = Vec2(width / 2.0f, 0.5f);
+
+    // Top wall
+    BODIES.emplace_back(width, 1.0f, true);
+    WALL_BODIES.push_back(&BODIES.back());
+    WALL_BODIES.back()->m_pos = Vec2(width / 2.0f, height - 0.5f);
+
+    // Left wall
+    BODIES.emplace_back(1.0f, height, true);
+    WALL_BODIES.push_back(&BODIES.back());
+    WALL_BODIES.back()->m_pos = Vec2(0.5f, height / 2.0f);
+
+    // Right wall
+    BODIES.emplace_back(1.0f, height, true);
+    WALL_BODIES.push_back(&BODIES.back());
+    WALL_BODIES.back()->m_pos = Vec2(width - 0.5f, height / 2.0f);
+
+    for (auto *wall : WALL_BODIES)
+    {
+        wall->update_aabb();
+    }
 }
 
 EMSCRIPTEN_BINDINGS(physics_engine)
@@ -552,4 +619,9 @@ EMSCRIPTEN_BINDINGS(physics_engine)
     function("setIsPaused", &set_is_paused);
     function("toggleIsPaused", &toggle_is_paused);
     function("isPaused", &is_paused);
+
+    function("setDT", &set_dt);
+    function("setBounds", &set_bounds);
+
+    function("step", &step);
 }

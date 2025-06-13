@@ -14,7 +14,6 @@ struct Vec2Wrapper
     Vec2Wrapper(float x_, float y_) : x(x_), y(y_) {}
 };
 
-extern std::vector<Rigidbody> BODIES;
 extern void step();
 
 static int g_draggedBodyIndex = -1;
@@ -71,7 +70,6 @@ void update_mouse_position(float x, float y)
 void end_mouse_drag()
 {
  
-}
 
 int get_body_at_position(float x, float y)
 {
@@ -288,10 +286,7 @@ float get_dt()
     return DT;
 }
 
-void setDT(float dt)
-{
-    DT = dt;
-}
+
 
 float getDT()
 {
@@ -329,62 +324,6 @@ void set_gravity(float gx, float gy)
 {
 }
 
-void set_bounds(float width, float height)
-{
-    if (width <= 0 || height <= 0)
-    {
-        std::cout << "Invalid bounds: width=" << width << ", height=" << height << std::endl;
-        return;
-    }
-
-    std::vector<size_t> wallIndices;
-    for (auto *wall : WALL_BODIES)
-    {
-        for (size_t i = 0; i < BODIES.size(); i++)
-        {
-            if (&BODIES[i] == wall)
-            {
-                wallIndices.push_back(i);
-                break;
-            }
-        }
-    }
-
-    std::sort(wallIndices.begin(), wallIndices.end(), std::greater<size_t>());
-
-    for (size_t index : wallIndices)
-    {
-        clear_forces_on_body(index);
-        BODIES.erase(BODIES.begin() + index);
-    }
-
-    WALL_BODIES.clear();
-
-    // Bottom wall
-    BODIES.emplace_back(width, 1.0f, true);
-    WALL_BODIES.push_back(&BODIES.back());
-    WALL_BODIES.back()->m_pos = Vec2(width / 2.0f, 0.5f);
-
-    // Top wall
-    BODIES.emplace_back(width, 1.0f, true);
-    WALL_BODIES.push_back(&BODIES.back());
-    WALL_BODIES.back()->m_pos = Vec2(width / 2.0f, height - 0.5f);
-
-    // Left wall
-    BODIES.emplace_back(1.0f, height, true);
-    WALL_BODIES.push_back(&BODIES.back());
-    WALL_BODIES.back()->m_pos = Vec2(0.5f, height / 2.0f);
-
-    // Right wall
-    BODIES.emplace_back(1.0f, height, true);
-    WALL_BODIES.push_back(&BODIES.back());
-    WALL_BODIES.back()->m_pos = Vec2(width - 0.5f, height / 2.0f);
-
-    for (auto *wall : WALL_BODIES)
-    {
-        wall->update_aabb();
-    }
-}
 
 emscripten::val get_wall_body_indices()
 {
@@ -589,9 +528,6 @@ EMSCRIPTEN_BINDINGS(physics_engine)
     function("getBodyAtPosition", &get_body_at_position);
 
     // environment
-    function("setBounds", &set_bounds);
-    function("getWallBodyIndices", &get_wall_body_indices);
 
-    // force visualization
-    function("getAllForcesForVisualization", &get_all_forces_for_visualization);
+
 }
