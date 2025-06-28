@@ -559,7 +559,7 @@ void set_bounds(float width, float height)
     {
         const float r = 20.0f;
         const float cx = width * 0.5f;
-        const float y = height / 2.5f;
+        const float y = height / 2f;
         const float dx = width * 0.05f;
 
         std::vector<Vec2> pos;
@@ -573,7 +573,7 @@ void set_bounds(float width, float height)
         process_events();
 
         size_t B_size = BODIES.size();
-        float spring_stiffness = 600.0f;
+        float spring_stiffness = 700.0f;
         float spring_damping = 0.0f;
 
         auto make_spring = [&](std::shared_ptr<Rigidbody> a, std::shared_ptr<Rigidbody> b)
